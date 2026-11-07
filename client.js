@@ -454,7 +454,7 @@ window.__ModuleLoader__.load({
 
       return {
         phase,
-        data: isRecord(data) && data.ok !== false ? data : data,
+        data,
         text,
         failed,
         stopped,
@@ -1016,6 +1016,16 @@ window.__ModuleLoader__.load({
                 .map((entry) => (isRecord(entry) ? asString(entry.serial) : oneLine(entry, 40)))
                 .filter((serial) => serial !== undefined && serial !== '')
                 .join(', '),
+            ),
+          );
+        }
+        const warnings = Array.isArray(data.warnings) ? data.warnings.map((entry) => oneLine(entry, 200)).filter((entry) => entry !== '') : [];
+        if (warnings.length > 0) {
+          children.push(
+            h(
+              'div',
+              { key: 'warnings', style: { color: C.warn, fontSize: SMALL, display: 'flex', flexDirection: 'column', gap: '1px' } },
+              warnings.map((warning, index) => h('div', { key: `warning-${index}` }, warning)),
             ),
           );
         }
