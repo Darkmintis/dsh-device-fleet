@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "title": "设备列表",
+    "description": "Android 手机与模拟器驾驶舱：通过 adb 列出设备、安装构建、启动应用、截图、深链跳转并查看日志。"
+  },
+  "card": {
+    "adb": "adb",
+    "ready": "就绪",
+    "connected": "已连接",
+    "noReadyDevices": "没有就绪的设备",
+    "unauthorized": "未授权 — 请在设备上点按“允许 USB 调试”",
+    "offline": "离线",
+    "battery": "电量",
+    "screenOn": "屏幕已亮",
+    "screenOff": "屏幕已灭",
+    "emulator": "模拟器",
+    "phone": "手机",
+    "packageVersion": "应用包",
+    "screenshotSaved": "截图已保存",
+    "readImageHint": "可用 read_image 工具打开该绝对路径。",
+    "logcatTitle": "日志",
+    "matched": "匹配",
+    "truncated": "较早的匹配已截断",
+    "noMatches": "没有匹配的日志行",
+    "failed": "失败",
+    "done": "完成",
+    "approvalGated": "需要审批"
+  }
+}
