@@ -73,6 +73,7 @@ for (const locale of ['locale/en.json']) {
 const runtimeModules = [
   './lib/args.js',
   './lib/errors.js',
+  './lib/json.js',
   './lib/parse.js',
   './lib/platform.js',
   './lib/adb.js',
