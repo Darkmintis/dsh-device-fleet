@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "title": "Device fleet",
+    "description": "One cockpit for Android phones and emulators: list devices, install builds, launch apps, capture screenshots, deep-link, and tail logcat over adb."
+  },
+  "card": {
+    "adb": "adb",
+    "ready": "ready",
+    "connected": "connected",
+    "noReadyDevices": "No ready devices",
+    "unauthorized": "Unauthorized — tap \"Allow USB debugging\"",
+    "offline": "Offline",
+    "battery": "Battery",
+    "screenOn": "Screen on",
+    "screenOff": "Screen off",
+    "emulator": "Emulator",
+    "phone": "Phone",
+    "packageVersion": "Package",
+    "screenshotSaved": "Screenshot saved",
+    "readImageHint": "Open the absolute path with read_image.",
+    "logcatTitle": "logcat",
+    "matched": "matched",
+    "truncated": "older matches dropped",
+    "noMatches": "No matching lines",
+    "failed": "Failed",
+    "done": "Done",
+    "approvalGated": "Approval required"
+  }
+}

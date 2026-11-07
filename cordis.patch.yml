@@ -1,0 +1,5 @@
+# Inserts the device-fleet Host plugin and its Web client half.
+- insert:
+    - id: dsh-device-fleet
+      name: '@darkmintis/dsh-device-fleet'
+      config: {}
