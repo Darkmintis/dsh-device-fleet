@@ -7,6 +7,18 @@ function existsIn(existing) {
   return (candidate) => existing.has(candidate.replaceAll('\\', '/'));
 }
 
+/**
+ * Normalise separators so Windows-shaped expectations hold on any CI OS:
+ * the discovery module runs on the host platform, so `node:path` joins with
+ * backslashes on Windows and forward slashes on Linux/macOS.
+ *
+ * @param {string | undefined} value Resolved path.
+ * @returns {string} slash-normalised path.
+ */
+function slash(value) {
+  return (value ?? '').replaceAll('\\', '/');
+}
+
 const WIN = /** @type {NodeJS.Platform} */ ('win32');
 
 test('splitPathList splits on the platform separator and drops blanks', () => {
@@ -19,24 +31,25 @@ test('findOnPath probes platform suffixes in PATH order', () => {
   const env = { PATH: 'C:/tools;C:/android/platform-tools' };
   const existing = new Set(['C:/android/platform-tools/adb.exe']);
   const found = findOnPath('adb', { env, platform: WIN, exists: existsIn(existing) });
-  assert.deepEqual(found, { path: 'C:\\android\\platform-tools\\adb.exe', source: 'PATH' });
+  assert.equal(slash(found?.path), 'C:/android/platform-tools/adb.exe');
+  assert.equal(found?.source, 'PATH');
 });
 
 test('resolveAdb prefers ANDROID_HOME over PATH', () => {
   const env = { ANDROID_HOME: 'D:/sdk', PATH: 'C:/tools' };
   const existing = new Set(['D:/sdk/platform-tools/adb.exe', 'C:/tools/adb.exe']);
   const found = resolveAdb({ env, platform: WIN, exists: existsIn(existing) });
-  assert.equal(found?.path, 'D:\\sdk\\platform-tools\\adb.exe');
+  assert.equal(slash(found?.path), 'D:/sdk/platform-tools/adb.exe');
   assert.match(found?.source ?? '', /ANDROID_HOME/u);
 });
 
 test('resolveAdb falls back to ANDROID_SDK_ROOT then PATH then undefined', () => {
   const env = { ANDROID_SDK_ROOT: 'E:/android', PATH: 'C:/tools' };
   const rooted = new Set(['E:/android/platform-tools/adb.exe']);
-  assert.equal(resolveAdb({ env, platform: WIN, exists: existsIn(rooted) })?.path, 'E:\\android\\platform-tools\\adb.exe');
+  assert.equal(slash(resolveAdb({ env, platform: WIN, exists: existsIn(rooted) })?.path), 'E:/android/platform-tools/adb.exe');
 
   const pathOnly = new Set(['C:/tools/adb.exe']);
-  assert.equal(resolveAdb({ env, platform: WIN, exists: existsIn(pathOnly) })?.path, 'C:\\tools\\adb.exe');
+  assert.equal(slash(resolveAdb({ env, platform: WIN, exists: existsIn(pathOnly) })?.path), 'C:/tools/adb.exe');
 
   assert.equal(resolveAdb({ env: {}, platform: WIN, exists: () => false }), undefined);
 });
@@ -59,12 +72,12 @@ test('resolveJava uses JAVA_HOME before PATH', () => {
   const env = { JAVA_HOME: 'D:/jdk-21', PATH: 'C:/tools' };
   const existing = new Set(['D:/jdk-21/bin/java.exe', 'C:/tools/java.exe']);
   const found = resolveJava({ env, platform: WIN, exists: existsIn(existing) });
-  assert.equal(found?.path, 'D:\\jdk-21\\bin\\java.exe');
+  assert.equal(slash(found?.path), 'D:/jdk-21/bin/java.exe');
   assert.equal(found?.source, 'JAVA_HOME');
 });
 
 test('resolveFlutter finds the Windows batch wrapper', () => {
   const env = { PATH: 'D:/dev/flutter/bin' };
   const found = resolveFlutter({ env, platform: WIN, exists: existsIn(new Set(['D:/dev/flutter/bin/flutter.bat'])) });
-  assert.equal(found?.path, 'D:\\dev\\flutter\\bin\\flutter.bat');
+  assert.equal(slash(found?.path), 'D:/dev/flutter/bin/flutter.bat');
 });
