@@ -19,4 +19,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - Read-only conversation cards for device listings, screenshots, and logcat.
 - Unit + fake-adb integration tests, CI (Node 24), and a manual smoke script.
 
+### Fixed
+
+- Tool results are normalised to lossless JSON (no `undefined`/`NaN` values), so every result satisfies the Harness output validator.
+- Device listings report whether the adb server had to be started, and the Web client surfaces adb warnings in the fleet card.
+
 [0.1.0]: https://github.com/Darkmintis/dsh-device-fleet/releases/tag/v0.1.0
