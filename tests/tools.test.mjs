@@ -78,7 +78,6 @@ test('registers every v1 tool with a precise description and strict schema', () 
     'device_logcat',
     'device_pull',
     'device_screenshot',
-    'device_shell',
     'device_stop',
     'device_which',
     'emulator_start',
@@ -132,9 +131,9 @@ test('execute rejects blank strings and missing required arguments', async () =>
   const blank = await tools.get('device_launch').execute({ packageName: '   ' });
   assert.equal(blank.ok, false);
   assert.match(blank.error, /must not be blank/u);
-  const missing = await tools.get('device_shell').execute({ command: 'pm list packages' });
+  const missing = await tools.get('device_pull').execute({});
   assert.equal(missing.ok, false);
-  assert.match(missing.error, /missing required argument "serial"/u);
+  assert.match(missing.error, /missing required argument "remotePath"/u);
   assert.equal(calls.length, 0);
 });
 
@@ -200,8 +199,5 @@ test('approval gate asks only for destructive tools and passes everything else t
   assert.equal(clear.kind, 'ask');
   assert.match(clear.reason, /cannot be undone/u);
 
-  const shell = await handler({ name: 'device_shell', arguments: { serial: 'emulator-5554', command: 'pm list packages' } }, next);
-  assert.equal(shell.kind, 'ask');
-  assert.match(shell.reason, /pm list packages/u);
-  assert.match(shell.reason, /emulator-5554/u);
+
 });

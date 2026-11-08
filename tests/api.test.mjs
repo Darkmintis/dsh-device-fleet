@@ -258,3 +258,44 @@ test('GET version reports the running Host generation', async (t) => {
   await call(makeReq({ url: `${FLEET_API_PREFIX}/version` }), res);
   assert.deepEqual(jsonBody(res), { ok: true, pluginVersion: '0.1.0' });
 });
+
+test('the panel selection drives actions without explicit serials', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-fleet-api-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = makeService('multi', root);
+  const { call } = makeApi(service);
+
+  const selectRes = makeRes();
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/select`, body: { serials: ['emulator-5554'] } }), selectRes);
+  const selected = jsonBody(selectRes);
+  assert.equal(selected.ok, true);
+  assert.deepEqual(selected.selected, ['emulator-5554']);
+
+  const devicesRes = makeRes();
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/devices` }), devicesRes);
+  assert.deepEqual(jsonBody(devicesRes).selected, ['emulator-5554']);
+
+  const actionRes = makeRes();
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/action`, body: { action: 'launch', packageName: 'com.example.app' } }), actionRes);
+  const action = jsonBody(actionRes);
+  assert.deepEqual(action.results.map((result) => result.serial), ['emulator-5554'], 'only the selection is targeted');
+});
+
+test('relaunch and stop resolve the foreground app instead of asking for a package', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-fleet-api-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = makeService('single', root);
+  const { call } = makeApi(service);
+
+  const relaunchRes = makeRes();
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/action`, body: { action: 'relaunch', serials: ['R58M12345'] } }), relaunchRes);
+  const relaunch = jsonBody(relaunchRes);
+  assert.equal(relaunch.results[0].ok, true, relaunch.results[0].text);
+  assert.equal(relaunch.results[0].value.relaunched, 'com.example.app');
+
+  const stopRes = makeRes();
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/action`, body: { action: 'stop', serials: ['R58M12345'] } }), stopRes);
+  const stop = jsonBody(stopRes);
+  assert.equal(stop.results[0].ok, true, stop.results[0].text);
+  assert.equal(stop.results[0].value.packageName, 'com.example.app');
+});

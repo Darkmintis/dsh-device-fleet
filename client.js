@@ -61,7 +61,6 @@ window.__ModuleLoader__.load({
       'device_screenshot',
       'device_logcat',
       'device_deep_link',
-      'device_shell',
       'device_pull',
       'device_which',
       'emulator_start',
@@ -69,7 +68,7 @@ window.__ModuleLoader__.load({
     ];
 
     /** Tools whose Host call is gated by the approval service. */
-    const DESTRUCTIVE = new Set(['device_install', 'device_clear_data', 'device_shell']);
+    const DESTRUCTIVE = new Set(['device_install', 'device_clear_data']);
 
     /** English fallbacks, used when the locale namespace is briefly unavailable. */
     const FALLBACK_LABELS = {
@@ -1533,7 +1532,9 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * One device card inside the fleet panel.
+     * One device card in the selection gateway. Clicking the card toggles the
+     * device in the action set; there are no per-card buttons, so the panel
+     * stays a simple "pick devices, then act" surface.
      * @param {Record<string, any>} props Card props.
      * @returns {any} card element.
      */
@@ -1542,173 +1543,111 @@ window.__ModuleLoader__.load({
       const serial = typeof device.serial === 'string' ? device.serial : 'unknown';
       const state = typeof device.state === 'string' ? device.state : 'unknown';
       const tone = stateTone(state);
+      const selected = props.selected === true;
       const pkg = isRecord(device.package) ? device.package : undefined;
       const disabled = props.busy !== null;
       const kv = [
-        ['Android', `${device.androidVersion ?? '?'}  (SDK ${device.sdk ?? '?'})`],
+        ['Android', `${device.androidVersion ?? '?'} (SDK ${device.sdk ?? '?'})`],
         ['Battery', typeof device.batteryPct === 'number' ? `${Math.round(device.batteryPct)}%` : '—'],
-        ['Screen', device.screenOn === true ? 'on' : device.screenOn === false ? 'off' : '—'],
         ['Type', device.isEmulator === true ? 'emulator' : 'device'],
       ];
-      if (pkg !== undefined) kv.push(['Package', `${pkg.versionName ?? '?'} (${pkg.versionCode ?? '?'})`]);
-      if (state !== 'device' && typeof device.hint === 'string') kv.push(['Note', device.hint]);
       return h(
         'div',
-        { key: serial, 'data-device': serial, 'data-state': state, style: PANEL.card },
+        {
+          key: serial,
+          'data-device': serial,
+          'data-state': state,
+          'data-selected': selected ? 'true' : 'false',
+          role: 'button',
+          tabIndex: 0,
+          'aria-pressed': selected,
+          onClick: () => {
+            if (!disabled) props.onToggle(serial);
+          },
+          onKeyDown: (event) => {
+            if (!disabled && (event.key === 'Enter' || event.key === ' ')) props.onToggle(serial);
+          },
+          style: {
+            ...PANEL.card,
+            cursor: disabled ? 'default' : 'pointer',
+            borderColor: selected ? C.brand : C.border2,
+            background: selected ? C.layer2 : C.layer1,
+            outline: 'none',
+            opacity: state === 'device' ? 1 : 0.65,
+          },
+        },
         h(
           'div',
           { style: PANEL.row },
+          h(
+            'span',
+            {
+              'aria-hidden': true,
+              style: {
+                width: '15px',
+                height: '15px',
+                borderRadius: '4px',
+                border: `1px solid ${selected ? C.brand : C.border2}`,
+                background: selected ? C.brand : 'transparent',
+                color: C.base,
+                fontSize: '10px',
+                lineHeight: '15px',
+                textAlign: 'center',
+                flex: 'none',
+              },
+            },
+            selected ? '✓' : '',
+          ),
           h('span', { style: PANEL.dot(tone), 'aria-hidden': true }),
           h('span', { style: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, String(device.model ?? serial)),
-          h('span', { style: PANEL.sub, title: serial }, serial),
           h('span', { style: { flex: '1 1 auto' } }),
           h('span', { style: PANEL.pill(tone) }, state === 'device' ? 'ready' : state),
         ),
+        h('div', { style: PANEL.sub, fontFamily: 'ui-monospace, monospace' }, serial),
         h(
           'div',
           { style: PANEL.kv },
           kv.flatMap(([label, value]) => [h('span', { key: `${label}-k` }, label), h('span', { key: `${label}-v`, style: { color: C.text } }, String(value))]),
         ),
-        h(
-          'div',
-          { style: { ...PANEL.toolbar, marginTop: '2px' } },
-          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('launch', serial) }, 'Launch'),
-          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('stop', serial) }, 'Stop'),
-          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('shot', serial) }, 'Shot'),
-          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('logs', serial) }, 'Logs'),
-          h('button', { type: 'button', style: PANEL.buttonDanger, disabled, onClick: () => props.onAction('clear', serial, true) }, 'Clear data'),
-        ),
+        pkg !== undefined ? h('div', { style: PANEL.sub }, `app ${String(pkg.versionName ?? '?')} (${String(pkg.versionCode ?? '?')})`) : null,
       );
     }
 
     /**
-     * Log drawer for one device or every device.
-     * @param {Record<string, any>} props Drawer props.
-     * @returns {any} drawer element.
-     */
-    function PanelLogs(props) {
-      return h(
-        'div',
-        { style: PANEL.modal, 'data-fleet-logs': 'open' },
-        h(
-          'div',
-          { style: PANEL.row },
-          h('span', { style: { fontWeight: 600 } }, props.serial === 'all' ? 'Logs · all devices' : `Logs · ${props.serial}`),
-          h('span', { style: { flex: '1 1 auto' } }),
-          h('button', { type: 'button', style: PANEL.button, onClick: props.onRefresh, disabled: props.loading }, props.loading ? 'Reading…' : 'Refresh'),
-          h('button', { type: 'button', style: PANEL.button, onClick: props.onClose }, 'Close'),
-        ),
-        h(
-          'div',
-          { style: PANEL.toolbar },
-          ...['flutter', 'crash', 'upload', 'all'].map((preset) =>
-            h(
-              'button',
-              {
-                key: preset,
-                type: 'button',
-                style: props.preset === preset ? PANEL.buttonPrimary : PANEL.button,
-                onClick: () => props.onPreset(preset),
-              },
-              preset,
-            ),
-          ),
-          h('input', {
-            style: { ...PANEL.input, minWidth: '140px' },
-            placeholder: 'filter text',
-            value: props.filter,
-            onChange: (event) => props.onFilter(event.target.value),
-          }),
-        ),
-        props.error !== null ? h('div', { style: PANEL.error }, props.error) : null,
-        props.serial === 'all' && Array.isArray(props.data)
-          ? props.data.map((entry) =>
-              h(
-                'div',
-                { key: String(entry.serial) },
-                h('div', { style: { ...PANEL.sub, marginTop: '4px' } }, String(entry.serial)),
-                h('pre', { style: PANEL.pre }, logText(entry.value)),
-              ),
-            )
-          : h('pre', { style: PANEL.pre }, logText(props.data)),
-      );
-    }
-
-    /**
-     * Render one logcat payload as bounded text.
-     * @param {any} value Logcat service value.
-     * @returns {string} text.
-     */
-    function logText(value) {
-      if (!isRecord(value)) return 'No data.';
-      if (value.ok === false) return `Error: ${oneLine(value.error, 300)}`;
-      const lines = Array.isArray(value.lines) ? value.lines.map((line) => String(line)) : [];
-      if (lines.length === 0) return `No matching lines. preset=${String(value.preset ?? 'all')}`;
-      return lines.join('\n');
-    }
-
-    /**
-     * Screenshot strip for captured device images.
-     * @param {Record<string, any>} props Strip props.
-     * @returns {any} strip element.
-     */
-    function PanelShots(props) {
-      return h(
-        'div',
-        { style: PANEL.modal },
-        h(
-          'div',
-          { style: PANEL.row },
-          h('span', { style: { fontWeight: 600 } }, 'Screenshots'),
-          h('span', { style: { flex: '1 1 auto' } }),
-          h('button', { type: 'button', style: PANEL.button, onClick: props.onClose }, 'Close'),
-        ),
-        h(
-          'div',
-          { style: { display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' } },
-          props.shots.map((shot) =>
-            h(
-              'div',
-              { key: shot.serial, style: PANEL.card },
-              h('div', { style: { ...PANEL.sub } }, shot.serial),
-              h('img', {
-                src: shot.url,
-                alt: `screenshot of ${shot.serial}`,
-                style: { width: '100%', borderRadius: '4px', border: `1px solid ${C.border1}`, background: C.base },
-              }),
-            ),
-          ),
-        ),
-      );
-    }
-
-    /**
-     * The main Device fleet panel.
-     * @param {Record<string, any>} props Slot props.
+     * Device gateway: select any number of devices, then run one action on the
+     * whole selection. No package/APK/deep-link inputs: the Host resolves the
+     * app from each device's foreground activity.
+     * @param {Record<string, any>} props Panel props.
      * @returns {any} panel element.
      */
     function FleetPanel(props) {
       const { useState, useEffect, useRef, useCallback } = React;
       const [listing, setListing] = useState(null);
+      const [selected, setSelected] = useState([]);
       const [error, setError] = useState(null);
       const [busy, setBusy] = useState(null);
       const [toast, setToast] = useState(null);
-      const [apkPath, setApkPath] = useState('');
-      const [packageName, setPackageName] = useState('');
-      const [deepLink, setDeepLink] = useState('');
       const [logs, setLogs] = useState({ open: false, serial: 'all', preset: 'all', filter: '', data: null, error: null, loading: false });
       const [shots, setShots] = useState({ open: false, list: [] });
       const timers = useRef({});
 
       const refresh = useCallback(async () => {
         try {
-          const payload = await fetchJson(apiUrl('devices', { packageName }));
+          const payload = await fetchJson(apiUrl('devices'));
           setListing(payload.value ?? null);
           setError(null);
+          const devices = Array.isArray(payload.value?.devices) ? payload.value.devices : [];
+          const readySerials = devices.filter((device) => device.state === 'device').map((device) => String(device.serial));
+          setSelected((current) => {
+            const kept = current.filter((serial) => readySerials.includes(serial));
+            if (kept.length > 0) return kept;
+            const hostSelection = Array.isArray(payload.selected) ? payload.selected.map(String).filter((serial) => readySerials.includes(serial)) : [];
+            return hostSelection.length > 0 ? hostSelection : readySerials;
+          });
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
-      }, [packageName]);
+      }, []);
 
       useEffect(() => {
         refresh();
@@ -1725,11 +1664,30 @@ window.__ModuleLoader__.load({
       const devices = Array.isArray(listing?.devices) ? listing.devices : [];
       const ready = devices.filter((device) => device.state === 'device');
 
+      const persistSelection = useCallback(async (serials) => {
+        setSelected(serials);
+        try {
+          await fetchJson(apiUrl('select'), { method: 'POST', body: { serials } });
+        } catch {
+          // Selection still works in the panel; the Host falls back to all ready
+          // devices until the next successful sync.
+        }
+      }, []);
+
+      const toggle = useCallback(
+        (serial) => {
+          const next = selected.includes(serial) ? selected.filter((entry) => entry !== serial) : [...selected, serial];
+          persistSelection(next);
+        },
+        [selected, persistSelection],
+      );
+
       const runAction = useCallback(
         async (action, extra = {}) => {
+          if (selected.length === 0) return;
           setBusy(action);
           try {
-            const payload = await fetchJson(apiUrl('action'), { method: 'POST', body: { action, ...extra } });
+            const payload = await fetchJson(apiUrl('action'), { method: 'POST', body: { action, serials: selected, ...extra } });
             const results = Array.isArray(payload.results) ? payload.results : [];
             const failed = results.filter((entry) => entry.ok !== true);
             if (failed.length > 0) {
@@ -1744,26 +1702,7 @@ window.__ModuleLoader__.load({
             setBusy(null);
           }
         },
-        [refresh],
-      );
-
-      const onDeviceAction = useCallback(
-        async (kind, serial, destructive) => {
-          if (kind === 'logs') {
-            setLogs((current) => ({ ...current, open: true, serial, data: null, error: null }));
-            return;
-          }
-          if (kind === 'shot') {
-            await captureShot(serial);
-            return;
-          }
-          if (destructive === true && !window.confirm(`Clear all app data for ${packageName || 'the app'} on ${serial}? This cannot be undone.`)) return;
-          await runAction(kind, {
-            serials: [serial],
-            ...(kind === 'launch' || kind === 'stop' || kind === 'clear' ? { packageName } : {}),
-          });
-        },
-        [packageName, runAction],
+        [selected, refresh],
       );
 
       const captureShot = useCallback(async (serial) => {
@@ -1790,13 +1729,18 @@ window.__ModuleLoader__.load({
         }
       }, []);
 
+      const shootSelected = useCallback(async () => {
+        for (const serial of selected) await captureShot(serial);
+      }, [selected, captureShot]);
+
       const fetchLogs = useCallback(async () => {
         setLogs((current) => ({ ...current, loading: true, error: null }));
         try {
+          const targets = logs.serial === 'all' ? selected.join(',') : logs.serial;
           const payload = await fetchJson(
             apiUrl('logs', {
-              serial: logs.serial === 'all' ? undefined : logs.serial,
-              serials: logs.serial === 'all' ? 'all' : undefined,
+              serial: logs.serial === 'all' ? undefined : targets,
+              serials: logs.serial === 'all' ? (targets === '' ? 'all' : targets) : undefined,
               preset: logs.preset,
               filter: logs.filter,
               lines: 120,
@@ -1813,7 +1757,7 @@ window.__ModuleLoader__.load({
         } catch (cause) {
           setLogs((current) => ({ ...current, data: null, loading: false, error: cause instanceof Error ? cause.message : String(cause) }));
         }
-      }, [logs.serial, logs.preset, logs.filter]);
+      }, [logs.serial, logs.preset, logs.filter, selected]);
 
       useEffect(() => {
         if (!logs.open) return undefined;
@@ -1829,94 +1773,60 @@ window.__ModuleLoader__.load({
         [shots.list],
       );
 
+      const selectedCount = selected.length;
+      const actionDisabled = busy !== null || selectedCount === 0;
+
       return h(
         'div',
         { 'data-fleet-panel': 'main', style: PANEL.wrap },
         h(
           'div',
           { style: PANEL.header },
-          h('span', { style: PANEL.title }, 'Device fleet'),
-          h('span', { style: PANEL.sub }, listing === null ? 'loading…' : `${ready.length} ready / ${devices.length} connected`),
+          h('span', { style: PANEL.title }, 'Devices'),
+          h('span', { style: PANEL.sub }, listing === null ? '' : `${ready.length} ready · ${selectedCount} selected`),
           h('span', { style: { flex: '1 1 auto' } }),
           h('button', { type: 'button', style: PANEL.button, onClick: () => refresh(), disabled: busy !== null }, 'Refresh'),
-          h('button', { type: 'button', style: PANEL.buttonPrimary, onClick: () => runAction('launch', { packageName }), disabled: busy !== null || packageName === '' }, 'Launch all'),
-          h('button', { type: 'button', style: PANEL.button, onClick: () => runAction('stop', { packageName }), disabled: busy !== null || packageName === '' }, 'Stop all'),
-          h('button', { type: 'button', style: PANEL.button, onClick: () => runAction('shot'), disabled: busy !== null }, 'Screenshot all'),
-          h('button', { type: 'button', style: PANEL.button, onClick: () => setLogs((current) => ({ ...current, open: true, serial: 'all' })), disabled: busy !== null }, 'Logs all'),
-          h(
-            'button',
-            {
-              type: 'button',
-              style: PANEL.buttonDanger,
-              onClick: () => {
-                if (window.confirm(`Clear all app data for ${packageName || 'the app'} on every device? This cannot be undone.`)) runAction('clear', { packageName });
-              },
-              disabled: busy !== null || packageName === '',
-            },
-            'Clear all',
-          ),
         ),
         error !== null ? h('div', { style: PANEL.error }, error) : null,
         toast !== null ? h('div', { style: PANEL.toast(toast.tone) }, toast.text) : null,
         h(
           'div',
           { style: PANEL.toolbar },
-          h('span', { style: PANEL.sub }, 'Package'),
-          h('input', {
-            style: PANEL.input,
-            placeholder: 'com.example.app',
-            value: packageName,
-            onChange: (event) => setPackageName(event.target.value.trim()),
-          }),
-          h('span', { style: PANEL.sub }, 'APK'),
-          h('input', {
-            style: { ...PANEL.input, minWidth: '260px' },
-            placeholder: 'absolute path to app-debug.apk',
-            value: apkPath,
-            onChange: (event) => setApkPath(event.target.value.trim()),
-          }),
+          h('button', { type: 'button', style: PANEL.buttonPrimary, onClick: () => runAction('relaunch'), disabled: actionDisabled }, 'Relaunch'),
+          h('button', { type: 'button', style: PANEL.button, onClick: () => runAction('stop'), disabled: actionDisabled }, 'Stop'),
+          h('button', { type: 'button', style: PANEL.button, onClick: () => shootSelected(), disabled: actionDisabled }, 'Screenshot'),
           h(
             'button',
             {
               type: 'button',
-              style: PANEL.buttonPrimary,
-              disabled: busy !== null || apkPath === '',
+              style: PANEL.button,
+              onClick: () => setLogs((current) => ({ ...current, open: true, serial: 'all' })),
+              disabled: actionDisabled,
+            },
+            'Logs',
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: PANEL.buttonDanger,
               onClick: () => {
-                if (window.confirm(`Install ${apkPath} on every ready device?`)) runAction('install', { apkPath });
+                if (window.confirm(`Clear the foreground app's data on ${selectedCount} selected device(s)? This cannot be undone.`)) runAction('clear');
               },
+              disabled: actionDisabled,
             },
-            'Install all',
+            'Clear data',
           ),
-        ),
-        h(
-          'div',
-          { style: PANEL.toolbar },
-          h('span', { style: PANEL.sub }, 'Deep link'),
-          h('input', {
-            style: { ...PANEL.input, minWidth: '300px' },
-            placeholder: 'https://example.com or myapp://route/42',
-            value: deepLink,
-            onChange: (event) => setDeepLink(event.target.value.trim()),
-          }),
+          h('span', { style: { flex: '1 1 auto' } }),
           h(
             'button',
-            {
-              type: 'button',
-              style: PANEL.buttonPrimary,
-              disabled: busy !== null || deepLink === '',
-              onClick: () => runAction('deep_link', { url: deepLink }),
-            },
-            'Open on all',
+            { type: 'button', style: PANEL.button, onClick: () => persistSelection(ready.map((device) => String(device.serial))), disabled: ready.length === 0 },
+            'Select all',
           ),
-        ),
-        h(
-          'div',
-          { style: PANEL.sub },
-          listing?.adb?.path !== undefined ? `adb: ${listing.adb.path}` : 'adb path unknown',
-          listing?.androidSdk !== undefined ? ` · SDK: ${listing.androidSdk}` : '',
+          h('button', { type: 'button', style: PANEL.button, onClick: () => persistSelection([]), disabled: selectedCount === 0 }, 'None'),
         ),
         devices.length === 0
-          ? h('div', { style: { ...PANEL.card, color: C.sub } }, ready.length === 0 ? 'No ready devices. Connect a phone with USB debugging or boot an emulator, then refresh.' : '')
+          ? h('div', { style: { ...PANEL.card, color: C.sub } }, 'No devices. Connect a phone with USB debugging or boot an emulator, then refresh.')
           : h(
               'div',
               { style: PANEL.grid },
@@ -1925,11 +1835,26 @@ window.__ModuleLoader__.load({
                   key: String(device.serial),
                   device,
                   busy,
-                  onAction: onDeviceAction,
+                  selected: selected.includes(String(device.serial)),
+                  onToggle: toggle,
                 }),
               ),
             ),
-        logs.open ? h(PanelLogs, { ...logs, onClose: () => setLogs((current) => ({ ...current, open: false })), onRefresh: fetchLogs, onPreset: (preset) => setLogs((current) => ({ ...current, preset })), onFilter: (filter) => setLogs((current) => ({ ...current, filter })) }) : null,
+        h(
+          'div',
+          { style: PANEL.sub },
+          `Select the devices you are testing, then Relaunch/Stop/Logs act on all of them. ` +
+            `The app is detected from each device's foreground activity, and flutter run targets follow the same serial list.`,
+        ),
+        logs.open
+          ? h(PanelLogs, {
+              ...logs,
+              onClose: () => setLogs((current) => ({ ...current, open: false })),
+              onRefresh: fetchLogs,
+              onPreset: (preset) => setLogs((current) => ({ ...current, preset })),
+              onFilter: (filter) => setLogs((current) => ({ ...current, filter })),
+            })
+          : null,
         shots.open ? h(PanelShots, { shots: shots.list, onClose: () => setShots({ open: false, list: shots.list }) }) : null,
       );
     }

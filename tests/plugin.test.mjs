@@ -48,10 +48,10 @@ test('index.js declares the tool registry dependency', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('apply mounts 13 tools and one approval listener without touching adb', () => {
+test('apply mounts 12 tools and one approval listener without touching adb', () => {
   const { ctx, tools, listeners } = mockContext();
   assert.doesNotThrow(() => apply(ctx));
-  assert.equal(tools.size, 13);
+  assert.equal(tools.size, 12);
   assert.equal(listeners.length, 1);
   assert.equal(listeners[0].event, 'tools/pre-execute');
   for (const name of tools.keys()) {

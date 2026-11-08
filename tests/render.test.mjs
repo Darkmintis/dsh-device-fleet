@@ -98,14 +98,13 @@ test('screenshot and which results render actionable text', () => {
 test('generic results render the headline, facts, and output', () => {
   const text = renderText({
     ok: true,
-    tool: 'device_shell',
+    tool: 'device_pull',
     serial: 'R58M12345',
-    command: 'pm list packages',
-    exitCode: 0,
-    stdout: 'package:com.example.app',
+    remotePath: '/sdcard/Download/photo.jpg',
+    path: 'C:\\Temp\\photo.jpg',
+    bytes: 4096,
   });
-  assert.match(text, /Shell command completed\./u);
   assert.match(text, /R58M12345/u);
-  assert.match(text, /exit 0/u);
-  assert.match(text, /stdout:\npackage:com\.example\.app/u);
+  assert.match(text, /photo\.jpg/u);
+  assert.match(text, /4 KB/u);
 });

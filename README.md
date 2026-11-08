@@ -11,7 +11,7 @@ A two-phone test loop is usually a pile of terminals and carefully copied serial
 - **No guessing.** With more than one device connected, action tools refuse to pick one and list the serials instead.
 - **No hangs.** Every adb call has a hard timeout (10 s default, 20 s install, 15 s screenshot/logcat) and bounded output.
 - **No silent failures.** Missing adb, unauthorized devices, offline devices, install failures, and blocked commands return actionable `{ ok: false, code, error, hint }` results.
-- **Approval-gated side effects.** Install, clear-data, and shell execution ask for approval; listing, screenshots, logcat, and pulls never prompt.
+- **Approval-gated side effects.** Install and clear-data ask for approval; listing, screenshots, logcat, and pulls never prompt.
 - **Read-only UI.** Device cards render inside the conversation for `fleet_list`, screenshots, and logcat; actions stay on the audited tool path.
 
 ## Requirements
@@ -81,7 +81,7 @@ icon and a main-column cockpit for the connected phones and emulators.
 - Device cards show state, model, Android/SDK, battery, screen, and app version.
 - **Launch all**, **Stop all**, **Screenshot all**, **Logs all**, and **Clear all**
   run one action across every ready device; each card also has per-device buttons.
-- **Install all** takes an APK path; **Open on all** takes a deep link.
+- **Select the devices you are testing, then act on the selection.** Click cards to toggle them, then **Relaunch**, **Stop**, **Screenshot**, **Logs**, or **Clear data** run on every selected device. The app is detected from each device's foreground activity, so there is no package or APK field to fill in.
 - The log viewer streams bounded logcat snapshots per device with the same
   `flutter` / `crash` / `upload` / `all` presets and filter as the tools.
 - The panel polls only while it is open and talks to the Host through the same

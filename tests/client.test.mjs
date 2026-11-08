@@ -27,14 +27,13 @@ const FLEET_TOOLS = [
   'device_screenshot',
   'device_logcat',
   'device_deep_link',
-  'device_shell',
   'device_pull',
   'device_which',
   'emulator_start',
   'emulator_stop',
 ];
 
-const DESTRUCTIVE = new Set(['device_install', 'device_clear_data', 'device_shell']);
+const DESTRUCTIVE = new Set(['device_install', 'device_clear_data']);
 
 /** Arguments keyed by tool, mirroring the Host tool schemas. */
 const ARGS = {
@@ -46,7 +45,6 @@ const ARGS = {
   device_screenshot: { serial: 'emulator-5554' },
   device_logcat: { serial: 'emulator-5554', preset: 'flutter', filter: 'Exception', lines: 200 },
   device_deep_link: { serial: 'emulator-5554', url: 'myapp://route/42' },
-  device_shell: { serial: 'emulator-5554', command: 'getprop ro.build.version.release' },
   device_pull: { serial: 'emulator-5554', remotePath: '/sdcard/Download/photo.jpg' },
   device_which: {},
   emulator_start: { avdName: 'Pixel_7_API_34' },
@@ -135,16 +133,7 @@ const PAYLOADS = {
     hint: 'Reproduce the flow first for more signal.',
   },
   device_deep_link: { ok: true, tool: 'device_deep_link', serial: 'emulator-5554', url: 'myapp://route/42', output: 'Starting: Intent' },
-  device_shell: {
-    ok: true,
-    tool: 'device_shell',
-    serial: 'emulator-5554',
-    command: 'getprop ro.build.version.release',
-    argv: ['getprop', 'ro.build.version.release'],
-    exitCode: 0,
-    stdout: '14\n',
-    stderr: '',
-  },
+
   device_pull: {
     ok: true,
     tool: 'device_pull',
@@ -430,7 +419,7 @@ const { registrations, locales, effects, injections } = mount(module);
 const toolRegistrations = registrations.filter((entry) => entry.options.name === 'tool.call.toolview');
 const byKey = new Map(toolRegistrations.map((entry) => [entry.options.key, entry]));
 
-test('registers exactly the 13 fleet wire tool names', () => {
+test('registers exactly the 12 fleet wire tool names', () => {
   assert.deepEqual([...injections].sort(), ['main', 'sidebar.panellist', 'tool.call.toolview'], 'panel and sidebar entry are registered');
   const main = registrations.find((entry) => entry.options.name === 'main');
   assert.equal(main?.options.key, 'device-fleet', 'main panel key matches the fleet panel id');
@@ -438,7 +427,7 @@ test('registers exactly the 13 fleet wire tool names', () => {
   assert.equal(sidebar?.options.id, 'device-fleet', 'sidebar entry id addresses the main panel');
   assert.equal(typeof sidebar?.component, 'function', 'sidebar entry has an icon component');
   assert.equal(typeof main?.component, 'function', 'main panel has a component');
-  assert.equal(toolRegistrations.length, 13, 'one registration per fleet tool');
+  assert.equal(toolRegistrations.length, 12, 'one registration per fleet tool');
   const keys = toolRegistrations.map((entry) => entry.options.key).sort();
   assert.deepEqual(keys, [...FLEET_TOOLS].sort(), 'registered keys are exactly the fleet tool names');
   for (const entry of toolRegistrations) {
@@ -581,14 +570,6 @@ test('compact rows surface the key argument and result facts', () => {
   assert.match(install.text, /app-release\.apk/u, 'install shows the APK path');
   assert.match(install.text, /12 MB|12056 KB|12057 KB/u, 'install shows the APK size');
 
-  const shell = renderComponent(byKey.get('device_shell').component, {
-    toolName: 'device_shell',
-    phase: 'result',
-    block: resultBlock('device_shell', PAYLOADS.device_shell),
-    t: undefined,
-  });
-  assert.match(shell.text, /getprop ro\.build\.version\.release/u, 'shell shows the command');
-  assert.match(shell.text, /exit 0/u, 'shell shows the exit code');
 
   const which = renderComponent(byKey.get('device_which').component, {
     toolName: 'device_which',
@@ -612,14 +593,6 @@ test('failure envelopes render the error, hint, and failed status', () => {
   assert.match(fleet.text, /Run device_which/u, 'failure hint is shown');
   assert.match(fleet.text, /Failed/u, 'failure status is shown');
 
-  const shell = renderComponent(byKey.get('device_shell').component, {
-    toolName: 'device_shell',
-    phase: 'result',
-    block: resultBlock('device_shell', FAILURE_PAYLOAD),
-    t: undefined,
-  });
-  assert.match(shell.text, /adb devices failed/u, 'compact failure message is shown');
-  assert.match(shell.text, /Failed/u, 'compact failure status is shown');
 });
 
 test('result text is parsed when the block has no structured meta', () => {
@@ -668,7 +641,6 @@ test('no component throws for malformed phases and partial blocks', () => {
     { kind: 'tool-call-result', callId: 'call-1', meta: { unexpected: true }, content: [{ type: 'text', text: 'plain text, not JSON' }], isError: false },
     { kind: 'tool-call-result', callId: 'call-1', meta: null, content: [], isError: true, error: { name: 'ToolError', code: 'TOOL_ERROR' } },
     { phase: 'start', name: 'fleet_list', argsRaw: '{not json', args: null },
-    { phase: 'preparing', name: 'device_shell', args: undefined },
   ];
   for (const tool of FLEET_TOOLS) {
     const component = byKey.get(tool).component;

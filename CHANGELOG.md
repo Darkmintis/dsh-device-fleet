@@ -33,6 +33,15 @@ All notable changes to this project are documented here. The format follows [Kee
 - Read-only conversation cards for device listings, screenshots, and logcat.
 - Unit + fake-adb integration tests, CI (Node 24), and a manual smoke script.
 
+### Changed
+
+- The panel is now a **device gateway**: click cards to select devices, then
+  **Relaunch / Stop / Screenshot / Logs / Clear data** act on the whole selection.
+  Package, APK, deep-link inputs and the adb/SDK path line are gone; the app is
+  resolved from each device's foreground activity.
+- Removed the `device_shell` tool (and its approval gate). Fixed-argv adb actions
+  remain; no arbitrary device shell is exposed.
+
 ### Fixed
 
 - Tool results are normalised to lossless JSON (no `undefined`/`NaN` values), so every result satisfies the Harness output validator.

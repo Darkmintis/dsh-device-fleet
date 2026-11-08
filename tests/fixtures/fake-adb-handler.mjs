@@ -147,6 +147,13 @@ export function runFakeAdb(argv, env) {
     if (tool === 'dumpsys' && toolArgs[0] === 'power') {
       return { stdout: 'Power Manager State:\n  mWakefulness=Awake\n  mWakefulnessChanging=false\n' };
     }
+    if (tool === 'dumpsys' && toolArgs[0] === 'activity') {
+      return {
+        stdout:
+          'ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)\n' +
+          '  mResumedActivity: ActivityRecord{4f1a2b3 u0 com.example.app/.MainActivity t42}\n',
+      };
+    }
     if (tool === 'dumpsys' && toolArgs[0] === 'package') {
       if (toolArgs[1] === 'com.example.app') {
         return {
