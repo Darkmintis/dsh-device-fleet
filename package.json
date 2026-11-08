@@ -2,6 +2,7 @@
   "name": "@darkmintis/dsh-device-fleet",
   "version": "0.1.0",
   "description": "Android device fleet cockpit for DeepSeek Harness: list phones and emulators, install, launch, screenshot, deep-link, and tail logcat over adb.",
+  "author": "Darkmintis",
   "license": "MIT",
   "type": "module",
   "main": "index.js",

@@ -178,4 +178,4 @@ Tests are deterministic and never touch real hardware: `tests/fixtures/fake-adb-
 
 ## License
 
-MIT © 2026 Dipesh Mahat. See [LICENSE](LICENSE).
+MIT © 2026 Darkmintis. See [LICENSE](LICENSE).

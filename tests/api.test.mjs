@@ -123,7 +123,7 @@ test('panel API rejects an unauthenticated request before doing any work', async
   const service = makeService('single', root);
   const { call } = makeApi(service, { reject: 401 });
   const res = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}devices` }), res);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/devices` }), res);
   assert.equal(res.statusCode, 401);
   assert.equal(res.ended, true);
   assert.equal(res.body, undefined);
@@ -135,7 +135,7 @@ test('GET devices returns the structured fleet and rendered text', async (t) => 
   const service = makeService('mixed', root);
   const { call } = makeApi(service);
   const res = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}devices` }), res);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/devices` }), res);
   const payload = jsonBody(res);
   assert.equal(res.statusCode, 200);
   assert.equal(payload.ok, true);
@@ -152,7 +152,7 @@ test('GET devices accepts packageName for per-device app versions', async (t) =>
   const service = makeService('single', root);
   const { call } = makeApi(service);
   const res = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}devices?packageName=com.example.app` }), res);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/devices?packageName=com.example.app` }), res);
   const payload = jsonBody(res);
   assert.deepEqual(payload.value.devices[0].package, { name: 'com.example.app', versionName: '1.2.3', versionCode: '42' });
 });
@@ -166,7 +166,7 @@ test('POST action fans out one operation across every ready device', async (t) =
   await call(
     makeReq({
       method: 'POST',
-      url: `${FLEET_API_PREFIX}action`,
+      url: `${FLEET_API_PREFIX}/action`,
       body: { action: 'launch', packageName: 'com.example.app', serials: 'all' },
     }),
     res,
@@ -191,7 +191,7 @@ test('POST action can target one device and reports an install failure', async (
   await call(
     makeReq({
       method: 'POST',
-      url: `${FLEET_API_PREFIX}action`,
+      url: `${FLEET_API_PREFIX}/action`,
       body: { action: 'install', apkPath: apk, serials: ['R58M12345'] },
     }),
     res,
@@ -208,7 +208,7 @@ test('GET logs aggregates a bounded log snapshot per device', async (t) => {
   const service = makeService('multi', root);
   const { call } = makeApi(service);
   const res = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}logs?serials=all&preset=upload&lines=20` }), res);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/logs?serials=all&preset=upload&lines=20` }), res);
   const payload = jsonBody(res);
   assert.equal(payload.ok, true);
   assert.equal(payload.value.devices.length, 2);
@@ -222,7 +222,7 @@ test('GET screenshot streams a PNG for one device', async (t) => {
   const service = makeService('multi', root);
   const { call } = makeApi(service);
   const res = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}screenshot?serial=emulator-5554` }), res);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/screenshot?serial=emulator-5554` }), res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.headers['content-type'], 'image/png');
   assert.equal(res.headers['x-fleet-serial'], 'emulator-5554');
@@ -236,16 +236,16 @@ test('unknown endpoints and unsupported actions answer with a clear error', asyn
   const service = makeService('single', root);
   const { call } = makeApi(service);
   const missing = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}nope` }), missing);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/nope` }), missing);
   assert.equal(missing.statusCode, 404);
   assert.match(String(jsonBody(missing).error), /unknown fleet api endpoint: nope/u);
 
   const badAction = makeRes();
-  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}action`, body: { action: 'reboot-everything' } }), badAction);
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/action`, body: { action: 'reboot-everything' } }), badAction);
   assert.match(String(jsonBody(badAction).error), /unknown action/u);
 
   const badBody = makeRes();
-  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}action`, body: ['not', 'an', 'object'] }), badBody);
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/action`, body: ['not', 'an', 'object'] }), badBody);
   assert.match(String(jsonBody(badBody).error), /JSON object/u);
 });
 
@@ -255,6 +255,6 @@ test('GET version reports the running Host generation', async (t) => {
   const service = makeService('single', root);
   const { call } = makeApi(service);
   const res = makeRes();
-  await call(makeReq({ url: `${FLEET_API_PREFIX}version` }), res);
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/version` }), res);
   assert.deepEqual(jsonBody(res), { ok: true, pluginVersion: '0.1.0' });
 });
