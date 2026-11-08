@@ -36,6 +36,10 @@ function mockContext() {
         const disposer = callback();
         return typeof disposer === 'function' ? disposer : () => {};
       },
+      /** Optional Web services are absent in this test profile. */
+      inject() {
+        return () => {};
+      },
     },
   };
 }

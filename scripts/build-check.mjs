@@ -71,6 +71,7 @@ for (const locale of ['locale/en.json']) {
 
 /** Every module that ships to the Host runtime must import without throwing. */
 const runtimeModules = [
+  './lib/api.js',
   './lib/args.js',
   './lib/errors.js',
   './lib/json.js',

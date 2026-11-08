@@ -1,3 +1,17 @@
+## [Unreleased]
+
+### Added
+
+- **Device fleet panel**: a sidebar entry and main-column cockpit in the Web UI
+  showing every connected phone/emulator with launch, stop, clear-data,
+  screenshot, install, deep-link, and bounded logcat actions across all devices
+  at once.
+- **Panel HTTP API** (`/dsh-device-fleet/api/`) registered through the Web server
+  and admitted by the connection trust fence: devices, logs, screenshots (PNG),
+  and multi-device actions. The API is absent in headless profiles.
+- Panel API tests: unauthenticated rejection, structured payloads, multi-device
+  fan-out, per-device install failure, log aggregation, PNG streaming, and error
+  shapes.
 # Changelog
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

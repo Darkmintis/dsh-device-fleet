@@ -1349,6 +1349,622 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------
+    // Device fleet panel: main column surface + sidebar entry
+    // ------------------------------------------------------------------
+
+    /** Panel id shared by the `main` key and the `sidebar.panellist` entry. */
+    const PANEL_ID = 'device-fleet';
+    /** Host HTTP API prefix, resolved against the page base URL. */
+    const API_PREFIX = 'dsh-device-fleet/api/';
+    /** Device polling cadence while the panel is open. */
+    const DEVICE_POLL_MS = 4_000;
+    /** Log snapshot cadence while the log drawer is open. */
+    const LOG_POLL_MS = 2_000;
+
+    /**
+     * Build an absolute API URL from the page base.
+     * @param {string} endpoint API endpoint name.
+     * @param {Record<string, string | number | undefined>} [params] Query values; empty values are skipped.
+     * @returns {string} absolute URL.
+     */
+    function apiUrl(endpoint, params) {
+      const url = new URL(API_PREFIX + endpoint, document.baseURI);
+      if (params !== undefined) {
+        for (const [key, value] of Object.entries(params)) {
+          if (value === undefined || value === null || value === '') continue;
+          url.searchParams.set(key, String(value));
+        }
+      }
+      return url.href;
+    }
+
+    /**
+     * Fetch one JSON payload with same-origin credentials.
+     * @param {string} url Absolute URL.
+     * @param {{ method?: string, body?: unknown }} [options] Request options.
+     * @returns {Promise<Record<string, any>>} parsed payload.
+     */
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        method: options.method ?? 'GET',
+        credentials: 'same-origin',
+        headers: options.body === undefined ? undefined : { 'content-type': 'application/json' },
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      });
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('This page is not authorized against the Host. Reload the Web UI.');
+      }
+      const payload = await response.json().catch(() => null);
+      if (payload === null) throw new Error(`Host returned ${response.status} without JSON.`);
+      if (response.ok !== true) throw new Error(typeof payload.error === 'string' ? payload.error : `Host returned ${response.status}.`);
+      if (payload.ok === false) throw new Error(typeof payload.error === 'string' ? payload.error : 'Host request failed.');
+      return payload;
+    }
+
+    /** Panel layout constants. */
+    const PANEL = {
+      wrap: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        padding: '14px 16px',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'auto',
+        background: C.base,
+        color: C.text,
+      },
+      header: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+      title: { fontSize: '15px', fontWeight: 600 },
+      sub: { color: C.sub, fontSize: SMALL },
+      toolbar: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' },
+      input: {
+        font: 'inherit',
+        fontSize: SMALL,
+        padding: '4px 8px',
+        borderRadius: '6px',
+        border: `1px solid ${C.border2}`,
+        background: C.layer1,
+        color: C.text,
+        minWidth: '180px',
+      },
+      button: {
+        font: 'inherit',
+        fontSize: SMALL,
+        padding: '4px 9px',
+        borderRadius: '6px',
+        border: `1px solid ${C.border2}`,
+        background: C.layer2,
+        color: C.text,
+        cursor: 'pointer',
+      },
+      buttonPrimary: {
+        font: 'inherit',
+        fontSize: SMALL,
+        padding: '4px 9px',
+        borderRadius: '6px',
+        border: `1px solid ${C.brand}`,
+        background: C.layer1,
+        color: C.brand,
+        cursor: 'pointer',
+        fontWeight: 600,
+      },
+      buttonDanger: {
+        font: 'inherit',
+        fontSize: SMALL,
+        padding: '4px 9px',
+        borderRadius: '6px',
+        border: `1px solid ${C.err}`,
+        background: C.layer1,
+        color: C.err,
+        cursor: 'pointer',
+      },
+      grid: { display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' },
+      card: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        padding: '10px 12px',
+        borderRadius: '8px',
+        border: `1px solid ${C.border1}`,
+        background: C.layer1,
+        minWidth: 0,
+      },
+      row: { display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 },
+      kv: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', fontSize: SMALL, color: C.sub },
+      modal: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        padding: '10px 12px',
+        borderRadius: '8px',
+        border: `1px solid ${C.border2}`,
+        background: C.layer1,
+        minHeight: 0,
+      },
+      pre: {
+        fontFamily: MONO,
+        fontSize: '11px',
+        lineHeight: 1.45,
+        margin: 0,
+        padding: '8px',
+        borderRadius: '6px',
+        border: `1px solid ${C.border1}`,
+        background: C.base,
+        color: C.text,
+        maxHeight: '260px',
+        overflow: 'auto',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      },
+      toast: (tone) => ({
+        padding: '6px 10px',
+        borderRadius: '6px',
+        border: `1px solid ${tone === 'error' ? C.err : C.border2}`,
+        color: tone === 'error' ? C.err : C.text,
+        background: C.layer1,
+        fontSize: SMALL,
+        whiteSpace: 'pre-wrap',
+      }),
+      error: { padding: '6px 10px', borderRadius: '6px', border: `1px solid ${C.err}`, color: C.err, background: C.layer1, fontSize: SMALL },
+      pill: (tone) => ({
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '1px 7px',
+        borderRadius: '999px',
+        border: `1px solid ${tone}`,
+        color: tone,
+        fontSize: '11px',
+        fontWeight: 600,
+      }),
+      dot: (tone) => ({ width: '8px', height: '8px', borderRadius: '50%', background: tone, flex: 'none' }),
+    };
+
+    /**
+     * Device state → tone token.
+     * @param {string} state Device state.
+     * @returns {string} theme token.
+     */
+    function stateTone(state) {
+      if (state === 'device') return C.ok;
+      if (state === 'offline') return C.warn;
+      return C.err;
+    }
+
+    /**
+     * One device card inside the fleet panel.
+     * @param {Record<string, any>} props Card props.
+     * @returns {any} card element.
+     */
+    function PanelDeviceCard(props) {
+      const device = props.device ?? {};
+      const serial = typeof device.serial === 'string' ? device.serial : 'unknown';
+      const state = typeof device.state === 'string' ? device.state : 'unknown';
+      const tone = stateTone(state);
+      const pkg = isRecord(device.package) ? device.package : undefined;
+      const disabled = props.busy !== null;
+      const kv = [
+        ['Android', `${device.androidVersion ?? '?'}  (SDK ${device.sdk ?? '?'})`],
+        ['Battery', typeof device.batteryPct === 'number' ? `${Math.round(device.batteryPct)}%` : '—'],
+        ['Screen', device.screenOn === true ? 'on' : device.screenOn === false ? 'off' : '—'],
+        ['Type', device.isEmulator === true ? 'emulator' : 'device'],
+      ];
+      if (pkg !== undefined) kv.push(['Package', `${pkg.versionName ?? '?'} (${pkg.versionCode ?? '?'})`]);
+      if (state !== 'device' && typeof device.hint === 'string') kv.push(['Note', device.hint]);
+      return h(
+        'div',
+        { key: serial, 'data-device': serial, 'data-state': state, style: PANEL.card },
+        h(
+          'div',
+          { style: PANEL.row },
+          h('span', { style: PANEL.dot(tone), 'aria-hidden': true }),
+          h('span', { style: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, String(device.model ?? serial)),
+          h('span', { style: PANEL.sub, title: serial }, serial),
+          h('span', { style: { flex: '1 1 auto' } }),
+          h('span', { style: PANEL.pill(tone) }, state === 'device' ? 'ready' : state),
+        ),
+        h(
+          'div',
+          { style: PANEL.kv },
+          kv.flatMap(([label, value]) => [h('span', { key: `${label}-k` }, label), h('span', { key: `${label}-v`, style: { color: C.text } }, String(value))]),
+        ),
+        h(
+          'div',
+          { style: { ...PANEL.toolbar, marginTop: '2px' } },
+          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('launch', serial) }, 'Launch'),
+          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('stop', serial) }, 'Stop'),
+          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('shot', serial) }, 'Shot'),
+          h('button', { type: 'button', style: PANEL.button, disabled, onClick: () => props.onAction('logs', serial) }, 'Logs'),
+          h('button', { type: 'button', style: PANEL.buttonDanger, disabled, onClick: () => props.onAction('clear', serial, true) }, 'Clear data'),
+        ),
+      );
+    }
+
+    /**
+     * Log drawer for one device or every device.
+     * @param {Record<string, any>} props Drawer props.
+     * @returns {any} drawer element.
+     */
+    function PanelLogs(props) {
+      return h(
+        'div',
+        { style: PANEL.modal, 'data-fleet-logs': 'open' },
+        h(
+          'div',
+          { style: PANEL.row },
+          h('span', { style: { fontWeight: 600 } }, props.serial === 'all' ? 'Logs · all devices' : `Logs · ${props.serial}`),
+          h('span', { style: { flex: '1 1 auto' } }),
+          h('button', { type: 'button', style: PANEL.button, onClick: props.onRefresh, disabled: props.loading }, props.loading ? 'Reading…' : 'Refresh'),
+          h('button', { type: 'button', style: PANEL.button, onClick: props.onClose }, 'Close'),
+        ),
+        h(
+          'div',
+          { style: PANEL.toolbar },
+          ...['flutter', 'crash', 'upload', 'all'].map((preset) =>
+            h(
+              'button',
+              {
+                key: preset,
+                type: 'button',
+                style: props.preset === preset ? PANEL.buttonPrimary : PANEL.button,
+                onClick: () => props.onPreset(preset),
+              },
+              preset,
+            ),
+          ),
+          h('input', {
+            style: { ...PANEL.input, minWidth: '140px' },
+            placeholder: 'filter text',
+            value: props.filter,
+            onChange: (event) => props.onFilter(event.target.value),
+          }),
+        ),
+        props.error !== null ? h('div', { style: PANEL.error }, props.error) : null,
+        props.serial === 'all' && Array.isArray(props.data)
+          ? props.data.map((entry) =>
+              h(
+                'div',
+                { key: String(entry.serial) },
+                h('div', { style: { ...PANEL.sub, marginTop: '4px' } }, String(entry.serial)),
+                h('pre', { style: PANEL.pre }, logText(entry.value)),
+              ),
+            )
+          : h('pre', { style: PANEL.pre }, logText(props.data)),
+      );
+    }
+
+    /**
+     * Render one logcat payload as bounded text.
+     * @param {any} value Logcat service value.
+     * @returns {string} text.
+     */
+    function logText(value) {
+      if (!isRecord(value)) return 'No data.';
+      if (value.ok === false) return `Error: ${oneLine(value.error, 300)}`;
+      const lines = Array.isArray(value.lines) ? value.lines.map((line) => String(line)) : [];
+      if (lines.length === 0) return `No matching lines. preset=${String(value.preset ?? 'all')}`;
+      return lines.join('\n');
+    }
+
+    /**
+     * Screenshot strip for captured device images.
+     * @param {Record<string, any>} props Strip props.
+     * @returns {any} strip element.
+     */
+    function PanelShots(props) {
+      return h(
+        'div',
+        { style: PANEL.modal },
+        h(
+          'div',
+          { style: PANEL.row },
+          h('span', { style: { fontWeight: 600 } }, 'Screenshots'),
+          h('span', { style: { flex: '1 1 auto' } }),
+          h('button', { type: 'button', style: PANEL.button, onClick: props.onClose }, 'Close'),
+        ),
+        h(
+          'div',
+          { style: { display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' } },
+          props.shots.map((shot) =>
+            h(
+              'div',
+              { key: shot.serial, style: PANEL.card },
+              h('div', { style: { ...PANEL.sub } }, shot.serial),
+              h('img', {
+                src: shot.url,
+                alt: `screenshot of ${shot.serial}`,
+                style: { width: '100%', borderRadius: '4px', border: `1px solid ${C.border1}`, background: C.base },
+              }),
+            ),
+          ),
+        ),
+      );
+    }
+
+    /**
+     * The main Device fleet panel.
+     * @param {Record<string, any>} props Slot props.
+     * @returns {any} panel element.
+     */
+    function FleetPanel(props) {
+      const { useState, useEffect, useRef, useCallback } = React;
+      const [listing, setListing] = useState(null);
+      const [error, setError] = useState(null);
+      const [busy, setBusy] = useState(null);
+      const [toast, setToast] = useState(null);
+      const [apkPath, setApkPath] = useState('');
+      const [packageName, setPackageName] = useState('');
+      const [deepLink, setDeepLink] = useState('');
+      const [logs, setLogs] = useState({ open: false, serial: 'all', preset: 'all', filter: '', data: null, error: null, loading: false });
+      const [shots, setShots] = useState({ open: false, list: [] });
+      const timers = useRef({});
+
+      const refresh = useCallback(async () => {
+        try {
+          const payload = await fetchJson(apiUrl('devices', { packageName }));
+          setListing(payload.value ?? null);
+          setError(null);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }, [packageName]);
+
+      useEffect(() => {
+        refresh();
+        const timer = setInterval(() => refresh(), DEVICE_POLL_MS);
+        return () => clearInterval(timer);
+      }, [refresh]);
+
+      useEffect(() => {
+        if (toast === null) return undefined;
+        const timer = setTimeout(() => setToast(null), 5_000);
+        return () => clearTimeout(timer);
+      }, [toast]);
+
+      const devices = Array.isArray(listing?.devices) ? listing.devices : [];
+      const ready = devices.filter((device) => device.state === 'device');
+
+      const runAction = useCallback(
+        async (action, extra = {}) => {
+          setBusy(action);
+          try {
+            const payload = await fetchJson(apiUrl('action'), { method: 'POST', body: { action, ...extra } });
+            const results = Array.isArray(payload.results) ? payload.results : [];
+            const failed = results.filter((entry) => entry.ok !== true);
+            if (failed.length > 0) {
+              setToast({ tone: 'error', text: failed.map((entry) => `${entry.serial}: ${oneLine(entry.text, 240)}`).join('\n') });
+            } else {
+              setToast({ tone: 'ok', text: payload.text ?? `${action} finished on ${results.length} device(s)` });
+            }
+            await refresh();
+          } catch (cause) {
+            setToast({ tone: 'error', text: cause instanceof Error ? cause.message : String(cause) });
+          } finally {
+            setBusy(null);
+          }
+        },
+        [refresh],
+      );
+
+      const onDeviceAction = useCallback(
+        async (kind, serial, destructive) => {
+          if (kind === 'logs') {
+            setLogs((current) => ({ ...current, open: true, serial, data: null, error: null }));
+            return;
+          }
+          if (kind === 'shot') {
+            await captureShot(serial);
+            return;
+          }
+          if (destructive === true && !window.confirm(`Clear all app data for ${packageName || 'the app'} on ${serial}? This cannot be undone.`)) return;
+          await runAction(kind, {
+            serials: [serial],
+            ...(kind === 'launch' || kind === 'stop' || kind === 'clear' ? { packageName } : {}),
+          });
+        },
+        [packageName, runAction],
+      );
+
+      const captureShot = useCallback(async (serial) => {
+        setBusy(`shot:${serial}`);
+        try {
+          const response = await fetch(apiUrl('screenshot', { serial }), { credentials: 'same-origin' });
+          if (response.status === 401 || response.status === 403) throw new Error('This page is not authorized against the Host.');
+          const type = response.headers.get('content-type') ?? '';
+          if (!type.startsWith('image/')) {
+            const payload = await response.json().catch(() => null);
+            throw new Error(payload !== null && typeof payload.error === 'string' ? payload.error : 'Screenshot failed.');
+          }
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setShots((current) => {
+            const previous = current.list.find((shot) => shot.serial === serial);
+            if (previous !== undefined) URL.revokeObjectURL(previous.url);
+            return { open: true, list: [...current.list.filter((shot) => shot.serial !== serial), { serial, url }] };
+          });
+        } catch (cause) {
+          setToast({ tone: 'error', text: cause instanceof Error ? cause.message : String(cause) });
+        } finally {
+          setBusy(null);
+        }
+      }, []);
+
+      const fetchLogs = useCallback(async () => {
+        setLogs((current) => ({ ...current, loading: true, error: null }));
+        try {
+          const payload = await fetchJson(
+            apiUrl('logs', {
+              serial: logs.serial === 'all' ? undefined : logs.serial,
+              serials: logs.serial === 'all' ? 'all' : undefined,
+              preset: logs.preset,
+              filter: logs.filter,
+              lines: 120,
+            }),
+          );
+          const value = payload.value ?? {};
+          if (logs.serial === 'all') {
+            const entries = Array.isArray(value.devices) ? value.devices : [];
+            setLogs((current) => ({ ...current, data: entries, loading: false }));
+          } else {
+            const entry = Array.isArray(value.devices) ? value.devices[0] : undefined;
+            setLogs((current) => ({ ...current, data: entry?.value ?? null, loading: false }));
+          }
+        } catch (cause) {
+          setLogs((current) => ({ ...current, data: null, loading: false, error: cause instanceof Error ? cause.message : String(cause) }));
+        }
+      }, [logs.serial, logs.preset, logs.filter]);
+
+      useEffect(() => {
+        if (!logs.open) return undefined;
+        fetchLogs();
+        const timer = setInterval(() => fetchLogs(), LOG_POLL_MS);
+        return () => clearInterval(timer);
+      }, [logs.open, fetchLogs]);
+
+      useEffect(
+        () => () => {
+          for (const shot of shots.list) URL.revokeObjectURL(shot.url);
+        },
+        [shots.list],
+      );
+
+      return h(
+        'div',
+        { 'data-fleet-panel': 'main', style: PANEL.wrap },
+        h(
+          'div',
+          { style: PANEL.header },
+          h('span', { style: PANEL.title }, 'Device fleet'),
+          h('span', { style: PANEL.sub }, listing === null ? 'loading…' : `${ready.length} ready / ${devices.length} connected`),
+          h('span', { style: { flex: '1 1 auto' } }),
+          h('button', { type: 'button', style: PANEL.button, onClick: () => refresh(), disabled: busy !== null }, 'Refresh'),
+          h('button', { type: 'button', style: PANEL.buttonPrimary, onClick: () => runAction('launch', { packageName }), disabled: busy !== null || packageName === '' }, 'Launch all'),
+          h('button', { type: 'button', style: PANEL.button, onClick: () => runAction('stop', { packageName }), disabled: busy !== null || packageName === '' }, 'Stop all'),
+          h('button', { type: 'button', style: PANEL.button, onClick: () => runAction('shot'), disabled: busy !== null }, 'Screenshot all'),
+          h('button', { type: 'button', style: PANEL.button, onClick: () => setLogs((current) => ({ ...current, open: true, serial: 'all' })), disabled: busy !== null }, 'Logs all'),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: PANEL.buttonDanger,
+              onClick: () => {
+                if (window.confirm(`Clear all app data for ${packageName || 'the app'} on every device? This cannot be undone.`)) runAction('clear', { packageName });
+              },
+              disabled: busy !== null || packageName === '',
+            },
+            'Clear all',
+          ),
+        ),
+        error !== null ? h('div', { style: PANEL.error }, error) : null,
+        toast !== null ? h('div', { style: PANEL.toast(toast.tone) }, toast.text) : null,
+        h(
+          'div',
+          { style: PANEL.toolbar },
+          h('span', { style: PANEL.sub }, 'Package'),
+          h('input', {
+            style: PANEL.input,
+            placeholder: 'com.example.app',
+            value: packageName,
+            onChange: (event) => setPackageName(event.target.value.trim()),
+          }),
+          h('span', { style: PANEL.sub }, 'APK'),
+          h('input', {
+            style: { ...PANEL.input, minWidth: '260px' },
+            placeholder: 'absolute path to app-debug.apk',
+            value: apkPath,
+            onChange: (event) => setApkPath(event.target.value.trim()),
+          }),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: PANEL.buttonPrimary,
+              disabled: busy !== null || apkPath === '',
+              onClick: () => {
+                if (window.confirm(`Install ${apkPath} on every ready device?`)) runAction('install', { apkPath });
+              },
+            },
+            'Install all',
+          ),
+        ),
+        h(
+          'div',
+          { style: PANEL.toolbar },
+          h('span', { style: PANEL.sub }, 'Deep link'),
+          h('input', {
+            style: { ...PANEL.input, minWidth: '300px' },
+            placeholder: 'https://example.com or myapp://route/42',
+            value: deepLink,
+            onChange: (event) => setDeepLink(event.target.value.trim()),
+          }),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: PANEL.buttonPrimary,
+              disabled: busy !== null || deepLink === '',
+              onClick: () => runAction('deep_link', { url: deepLink }),
+            },
+            'Open on all',
+          ),
+        ),
+        h(
+          'div',
+          { style: PANEL.sub },
+          listing?.adb?.path !== undefined ? `adb: ${listing.adb.path}` : 'adb path unknown',
+          listing?.androidSdk !== undefined ? ` · SDK: ${listing.androidSdk}` : '',
+        ),
+        devices.length === 0
+          ? h('div', { style: { ...PANEL.card, color: C.sub } }, ready.length === 0 ? 'No ready devices. Connect a phone with USB debugging or boot an emulator, then refresh.' : '')
+          : h(
+              'div',
+              { style: PANEL.grid },
+              ...devices.map((device) =>
+                h(PanelDeviceCard, {
+                  key: String(device.serial),
+                  device,
+                  busy,
+                  onAction: onDeviceAction,
+                }),
+              ),
+            ),
+        logs.open ? h(PanelLogs, { ...logs, onClose: () => setLogs((current) => ({ ...current, open: false })), onRefresh: fetchLogs, onPreset: (preset) => setLogs((current) => ({ ...current, preset })), onFilter: (filter) => setLogs((current) => ({ ...current, filter })) }) : null,
+        shots.open ? h(PanelShots, { shots: shots.list, onClose: () => setShots({ open: false, list: shots.list }) }) : null,
+      );
+    }
+
+    /**
+     * Sidebar icon for the Device fleet panel.
+     * @param {{ size?: number, active?: boolean }} props Icon props.
+     * @returns {any} svg element.
+     */
+    function FleetPanelIcon(props) {
+      const iconProps = props ?? {};
+      const size = typeof iconProps.size === 'number' && iconProps.size > 0 ? iconProps.size : 20;
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.6,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          style: { color: iconProps.active === true ? C.text : C.sub, display: 'block' },
+        },
+        h('rect', { x: 2.5, y: 6, width: 7.5, height: 13, rx: 1.6 }),
+        h('rect', { x: 14, y: 3, width: 7.5, height: 13, rx: 1.6 }),
+        h('path', { d: 'M10 12.5h4' }),
+        h('circle', { cx: 6.25, cy: 16, r: 0.9, fill: 'currentColor', stroke: 'none' }),
+        h('circle', { cx: 17.75, cy: 13, r: 0.9, fill: 'currentColor', stroke: 'none' }),
+      );
+    }
+
+    // ------------------------------------------------------------------
     // Plugin body
     // ------------------------------------------------------------------
 
@@ -1360,6 +1976,16 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       ctx.effect(() => ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH }), 'device-fleet: dictionaries');
+
+      // The sidebar entry and the main-column panel are the visible cockpit:
+      // the sidebar id addresses the panel with the same key.
+      ctx.slots.inject('sidebar.panellist', () =>
+        ctx.slots.register(
+          { name: 'sidebar.panellist', id: PANEL_ID, order: 30, label: 'Device fleet' },
+          FleetPanelIcon,
+        ),
+      );
+      ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, FleetPanel));
 
       const componentFor = (toolName) => {
         if (toolName === 'fleet_list') return FleetListCard;

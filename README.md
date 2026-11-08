@@ -73,6 +73,29 @@ device_logcat(serial: "emulator-5554", preset: "upload", filter: "failed")
 
 Every tool that acts on a device accepts `serial`. Switching between a phone and an emulator never changes the loop.
 
+## Visual panel
+
+Installing the bundle also adds a **Device fleet** section to the Web UI: a sidebar
+icon and a main-column cockpit for the connected phones and emulators.
+
+- Device cards show state, model, Android/SDK, battery, screen, and app version.
+- **Launch all**, **Stop all**, **Screenshot all**, **Logs all**, and **Clear all**
+  run one action across every ready device; each card also has per-device buttons.
+- **Install all** takes an APK path; **Open on all** takes a deep link.
+- The log viewer streams bounded logcat snapshots per device with the same
+  `flutter` / `crash` / `upload` / `all` presets and filter as the tools.
+- The panel polls only while it is open and talks to the Host through the same
+  authenticated same-origin connection as the rest of the Web UI; the Host route
+  rejects requests that fail the connection trust fence. Destructive panel actions
+  ask for a browser confirmation first.
+
+The panel and the agent tools share one service layer, so a panel action produces
+exactly the same validation, error shape, and side effects as a tool call. The
+Host route is registered only in profiles that compose the Web server and
+connection services; headless profiles keep the tools.
+
+> Upgrading a bundle updates the Host half when the app starts, so quit and
+> restart DeepSeek Harness once after installing a new version.
 ## Tool reference
 
 All tools return JSON. Failures are always `{ ok: false, code, error, hint?, details? }` and are rendered as readable text for the model.

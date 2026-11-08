@@ -271,6 +271,8 @@ function mount(module) {
   const registrations = [];
   const locales = [];
   const effects = [];
+  /** @type {string[]} */
+  const injections = [];
   const ctx = {
     locale: {
       register(namespace, dictionaries) {
@@ -285,10 +287,12 @@ function mount(module) {
     },
     slots: {
       inject(key, callback) {
-        assert.equal(key, 'tool.call.toolview', 'everything registers into tool.call.toolview');
+        injections.push(key);
         const result = callback();
-        assert.ok(Array.isArray(result), 'the inject callback returns an iterable of disposers');
-        assert.equal(result.length, FLEET_TOOLS.length, 'one disposer per registration');
+        const disposers = Array.isArray(result) ? result : [result];
+        for (const disposer of disposers) {
+          assert.equal(typeof disposer, 'function', `inject(${key}) returns disposers`);
+        }
         return () => {};
       },
       register(options, component) {
@@ -298,7 +302,7 @@ function mount(module) {
     },
   };
   module.apply(ctx);
-  return { registrations, locales, effects };
+  return { registrations, locales, effects, injections };
 }
 
 // ---------------------------------------------------------------------------
@@ -422,14 +426,22 @@ function renderComponent(component, props) {
 // ---------------------------------------------------------------------------
 
 const module = await loadClientModule();
-const { registrations, locales, effects } = mount(module);
-const byKey = new Map(registrations.map((entry) => [entry.options.key, entry]));
+const { registrations, locales, effects, injections } = mount(module);
+const toolRegistrations = registrations.filter((entry) => entry.options.name === 'tool.call.toolview');
+const byKey = new Map(toolRegistrations.map((entry) => [entry.options.key, entry]));
 
 test('registers exactly the 13 fleet wire tool names', () => {
-  assert.equal(registrations.length, 13, 'one registration per fleet tool');
-  const keys = registrations.map((entry) => entry.options.key).sort();
+  assert.deepEqual([...injections].sort(), ['main', 'sidebar.panellist', 'tool.call.toolview'], 'panel and sidebar entry are registered');
+  const main = registrations.find((entry) => entry.options.name === 'main');
+  assert.equal(main?.options.key, 'device-fleet', 'main panel key matches the fleet panel id');
+  const sidebar = registrations.find((entry) => entry.options.name === 'sidebar.panellist');
+  assert.equal(sidebar?.options.id, 'device-fleet', 'sidebar entry id addresses the main panel');
+  assert.equal(typeof sidebar?.component, 'function', 'sidebar entry has an icon component');
+  assert.equal(typeof main?.component, 'function', 'main panel has a component');
+  assert.equal(toolRegistrations.length, 13, 'one registration per fleet tool');
+  const keys = toolRegistrations.map((entry) => entry.options.key).sort();
   assert.deepEqual(keys, [...FLEET_TOOLS].sort(), 'registered keys are exactly the fleet tool names');
-  for (const entry of registrations) {
+  for (const entry of toolRegistrations) {
     assert.equal(entry.options.name, 'tool.call.toolview', 'slot name is tool.call.toolview');
     assert.equal(entry.options.locale, 'device-fleet', 'slot locale namespace is device-fleet');
     assert.equal(typeof entry.component, 'function', 'registration maps to a component');
