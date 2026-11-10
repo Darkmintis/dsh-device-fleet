@@ -73,26 +73,31 @@ device_logcat(serial: "emulator-5554", preset: "upload", filter: "failed")
 
 Every tool that acts on a device accepts `serial`. Switching between a phone and an emulator never changes the loop.
 
-## Visual panel
+## Floating device overlay
 
-Installing the bundle also adds a **Device fleet** section to the Web UI: a sidebar
-icon and a main-column cockpit for the connected phones and emulators.
+Installing the bundle adds **no sidebar page**: a round device button floats at the
+bottom-right of the window, and clicking it opens the device overlay.
 
-- Device cards show state, model, Android/SDK, battery, screen, and app version.
-- **Launch all**, **Stop all**, **Screenshot all**, **Logs all**, and **Clear all**
-  run one action across every ready device; each card also has per-device buttons.
-- **Select the devices you are testing, then act on the selection.** Click cards to toggle them, then **Relaunch**, **Stop**, **Screenshot**, **Logs**, or **Clear data** run on every selected device. The app is detected from each device's foreground activity, so there is no package or APK field to fill in.
+- Cards show state, model, Android/SDK, battery, screen, and app version. Click a
+  card to tick that device; **Select all** / **None** manage the set.
+- **Relaunch**, **Stop**, **Screenshot**, **Logs**, **Clear data**, and **Mirror**
+  run on every ticked device. The app is resolved from each device's foreground
+  activity, so there is no package or APK field to fill in.
+- **Mirror** opens one read-only scrcpy window per ticked device (`--no-control`);
+  input stays on the phone. scrcpy is discovered from `SCRCPY`, `PATH`, or the
+  WinGet package directory. When it is missing the button stays disabled and tells
+  you how to install it.
 - The log viewer streams bounded logcat snapshots per device with the same
   `flutter` / `crash` / `upload` / `all` presets and filter as the tools.
-- The panel polls only while it is open and talks to the Host through the same
+- The overlay polls only while it is open and talks to the Host through the same
   authenticated same-origin connection as the rest of the Web UI; the Host route
-  rejects requests that fail the connection trust fence. Destructive panel actions
-  ask for a browser confirmation first.
+  rejects requests that fail the connection trust fence. Clear-data asks for a
+  browser confirmation first.
 
-The panel and the agent tools share one service layer, so a panel action produces
-exactly the same validation, error shape, and side effects as a tool call. The
-Host route is registered only in profiles that compose the Web server and
-connection services; headless profiles keep the tools.
+The overlay and the agent tools share one service layer, so an overlay action
+produces exactly the same validation, error shape, and side effects as a tool
+call. The Host route is registered only in profiles that compose the Web server
+and connection services; headless profiles keep the tools.
 
 > Upgrading a bundle updates the Host half when the app starts, so quit and
 > restart DeepSeek Harness once after installing a new version.
@@ -172,8 +177,15 @@ Tests are deterministic and never touch real hardware: `tests/fixtures/fake-adb-
 
 - No video capture, no Play Console, no remote networking (out of scope for v1).
 - No broadcast "install on every device" helper: one call per device keeps approvals and failures attributable.
-- The Web client half is **read-only cards inside tool results**. Static DSH bundles cannot call new Host methods from a panel without generated Remote schemas, so v1 has no click-to-act device panel; actions run through the approval-gated tools. The full interactive panel is planned once the plugin ships its own Remote namespace.
-- `device_launch` requires a launcher activity; service-only apps must be started with `device_shell`/`am start-foreground-service` (not allowlisted in v1).
+- **Build commands are not driven from the overlay yet.** Ticking devices does not
+  rewrite `flutter run` / Gradle invocations: those are host build commands, not
+  device commands. The overlay covers installed-app actions (relaunch, stop,
+  screenshot, logcat, mirror); a projected "dev task" runner would need a
+  project-folder source and long-running-process handling.
+- `device_launch` requires a launcher activity; service-only apps have no launcher
+  activity to resolve.
+- Mirroring requires scrcpy; without it the overlay shows install guidance instead
+  of failing an action.
 - adb output caps: 4 MB text, 32 MB binary; logcat device read capped at 4000 lines.
 
 ## License

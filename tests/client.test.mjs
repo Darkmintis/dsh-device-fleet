@@ -419,14 +419,13 @@ const { registrations, locales, effects, injections } = mount(module);
 const toolRegistrations = registrations.filter((entry) => entry.options.name === 'tool.call.toolview');
 const byKey = new Map(toolRegistrations.map((entry) => [entry.options.key, entry]));
 
-test('registers exactly the 12 fleet wire tool names', () => {
-  assert.deepEqual([...injections].sort(), ['main', 'sidebar.panellist', 'tool.call.toolview'], 'panel and sidebar entry are registered');
-  const main = registrations.find((entry) => entry.options.name === 'main');
-  assert.equal(main?.options.key, 'device-fleet', 'main panel key matches the fleet panel id');
-  const sidebar = registrations.find((entry) => entry.options.name === 'sidebar.panellist');
-  assert.equal(sidebar?.options.id, 'device-fleet', 'sidebar entry id addresses the main panel');
-  assert.equal(typeof sidebar?.component, 'function', 'sidebar entry has an icon component');
-  assert.equal(typeof main?.component, 'function', 'main panel has a component');
+test('registers the floating launcher and exactly the 12 fleet wire tool names', () => {
+  assert.deepEqual([...injections].sort(), ['shell.overlay', 'tool.call.toolview'], 'launcher and tool cards are registered');
+  const launcher = registrations.find((entry) => entry.options.name === 'shell.overlay');
+  assert.equal(launcher?.options.id, 'device-fleet-launcher', 'floating launcher id');
+  assert.equal(typeof launcher?.component, 'function', 'launcher has a component');
+  assert.equal(registrations.filter((entry) => entry.options.name === 'main').length, 0, 'no main-column panel is registered');
+  assert.equal(registrations.filter((entry) => entry.options.name === 'sidebar.panellist').length, 0, 'no sidebar panel is registered');
   assert.equal(toolRegistrations.length, 12, 'one registration per fleet tool');
   const keys = toolRegistrations.map((entry) => entry.options.key).sort();
   assert.deepEqual(keys, [...FLEET_TOOLS].sort(), 'registered keys are exactly the fleet tool names');
@@ -435,6 +434,16 @@ test('registers exactly the 12 fleet wire tool names', () => {
     assert.equal(entry.options.locale, 'device-fleet', 'slot locale namespace is device-fleet');
     assert.equal(typeof entry.component, 'function', 'registration maps to a component');
   }
+});
+
+test('the floating launcher renders a closed gateway button', () => {
+  const launcher = registrations.find((entry) => entry.options.name === 'shell.overlay');
+  const { tree, text: rendered } = renderComponent(launcher.component, {});
+  assert.equal(tree.props['data-fleet-launcher-root'], 'open');
+  const serialized = JSON.stringify(tree);
+  assert.match(serialized, /data-fleet-launcher/u, 'the round launcher button renders');
+  assert.doesNotMatch(serialized, /data-fleet-overlay/u, 'the overlay stays closed until clicked');
+  assert.doesNotMatch(rendered, /Loading|Reading/u, 'no loading placeholder is rendered');
 });
 
 test('registers complete en and zh dictionaries', () => {

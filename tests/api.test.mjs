@@ -18,13 +18,14 @@ const FAST_TIMEOUTS = Object.fromEntries(Object.keys(TIMEOUTS).map((key) => [key
  * @param {string} root Temp root.
  * @returns {ReturnType<typeof createFleetService>} service.
  */
-function makeService(scenario, root) {
+function makeService(scenario, root, overrides = {}) {
   return createFleetService({
     adbPath: path.join(root, 'fake-adb'),
     spawn: /** @type {any} */ (createFakeSpawn()),
     env: { ...process.env, FAKE_ADB_SCENARIO: scenario, FAKE_ADB_STATE_DIR: path.join(root, 'state') },
     tmpRoot: path.join(root, 'tmp'),
     timeouts: FAST_TIMEOUTS,
+    ...overrides,
   });
 }
 
@@ -298,4 +299,38 @@ test('relaunch and stop resolve the foreground app instead of asking for a packa
   const stop = jsonBody(stopRes);
   assert.equal(stop.results[0].ok, true, stop.results[0].text);
   assert.equal(stop.results[0].value.packageName, 'com.example.app');
+});
+test('GET scrcpy reports the resolved mirror binary', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-fleet-api-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = makeService('single', root, { scrcpyPath: 'C:\\tools\\scrcpy.exe' });
+  const { call } = makeApi(service);
+  const res = makeRes();
+  await call(makeReq({ url: `${FLEET_API_PREFIX}/scrcpy` }), res);
+  const payload = jsonBody(res);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.value.scrcpy.available, true);
+  assert.equal(payload.value.scrcpy.path, 'C:\\tools\\scrcpy.exe');
+});
+
+test('POST action mirror launches one read-only scrcpy per selected device', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-fleet-api-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  /** @type {Array<{ binary: string, args: readonly string[] }>} */
+  const launches = [];
+  const service = makeService('multi', root, {
+    scrcpyPath: 'C:\\tools\\scrcpy.exe',
+    spawnDetached: (binary, args) => {
+      launches.push({ binary, args });
+      return { ok: true, pid: 4242 };
+    },
+  });
+  const { call } = makeApi(service);
+  const res = makeRes();
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/action`, body: { action: 'mirror', serials: ['R58M12345'] } }), res);
+  const payload = jsonBody(res);
+  assert.equal(payload.results[0].ok, true, payload.results[0].text);
+  assert.equal(payload.results[0].value.pid, 4242);
+  assert.equal(launches.length, 1);
+  assert.deepEqual(launches[0].args, ['--no-control', '--window-title', 'DSH device mirror', '-s', 'R58M12345']);
 });

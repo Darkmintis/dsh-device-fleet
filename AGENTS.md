@@ -7,9 +7,9 @@ Read this before changing the plugin. It describes the rules that keep the plugi
 ```text
 index.js              Host plugin entry: apply(ctx), inject = ['tools']
 cordis.patch.yml      Profile bundle patch (one insert row)
-lib/adb.js            adb/emulator process runner: spawn, capture, timeout, start-server retry
+lib/adb.js            adb/emulator process runner plus the detached scrcpy launcher: spawn, capture, timeout, start-server retry
 lib/parse.js          Pure parsers for adb/getprop/dumpsys/logcat output
-lib/platform.js       Runtime discovery of adb, SDK, emulator, java, flutter
+lib/platform.js       Runtime discovery of adb, SDK, emulator, java, flutter, scrcpy
 lib/service.js        Fleet operations + serial disambiguation + timeout mapping
 lib/tools.js          Tool definitions (name/description/schema/render/execute) + approval gate
 lib/args.js           Typed argument validation and JSON-schema projection
@@ -25,10 +25,10 @@ scripts/              lint, build-check, manual smoke
 
 ## Hard invariants
 
-1. **No shell.** adb and the emulator are always spawned with an argv array and `shell: false`. `child_process` may only be imported by `lib/adb.js` (enforced by `npm run lint`).
+1. **No shell.** adb, the emulator, and the scrcpy mirror are always spawned with an argv array and `shell: false`. `child_process` may only be imported by `lib/adb.js` (enforced by `npm run lint`); the scrcpy launcher there is detached, fixed-argv, and passes `--no-control`.
 2. **Bounded everything.** Every process call has a timeout and an output cap. logcat is a snapshot; never stream.
 3. **No telemetry, no network.** The Host half must not call `fetch`, `http`, `https`, or any remote service.
-4. **Approval on side effects.** Only `device_install`, `device_clear_data`, and `device_shell` may request approval, via a `tools/pre-execute` waterfall returning `{ kind: 'ask', reason }`. Read-only tools must call `next()`. Never bypass the approval service.
+4. **Approval on side effects.** Only `device_install` and `device_clear_data` may request approval, via a `tools/pre-execute` waterfall returning `{ kind: 'ask', reason }`. Read-only tools must call `next()`. Never bypass the approval service. The overlay gateway and the mirror action do not require approval: they never mutate app state.
 5. **No guessing.** When more than one ready device exists, action tools return `SERIAL_REQUIRED` with the device list. Do not add auto-selection.
 6. **Stable errors.** Tools never throw raw errors at the model; they return `{ ok: false, code, error, hint?, details? }` with an actionable hint. Codes live in `lib/errors.js`.
 7. **Typed inputs.** Every tool validates its arguments (`additionalProperties: false`, enum/bounds/type checks) before running adb.

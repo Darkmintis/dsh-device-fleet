@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { androidSdkRoots, findAndroidSdk, findOnPath, resolveAdb, resolveFlutter, resolveJava, splitPathList } from '../lib/platform.js';
+import { androidSdkRoots, findAndroidSdk, findOnPath, resolveAdb, resolveFlutter, resolveJava, resolveScrcpy, splitPathList } from '../lib/platform.js';
 
 /** @param {Set<string>} existing */
 function existsIn(existing) {
@@ -80,4 +80,15 @@ test('resolveFlutter finds the Windows batch wrapper', () => {
   const env = { PATH: 'D:/dev/flutter/bin' };
   const found = resolveFlutter({ env, platform: WIN, exists: existsIn(new Set(['D:/dev/flutter/bin/flutter.bat'])) });
   assert.equal(slash(found?.path), 'D:/dev/flutter/bin/flutter.bat');
+});
+
+test('resolveScrcpy prefers the SCRCPY override, then PATH, then nothing', () => {
+  const env = { SCRCPY: 'C:/tools/scrcpy.exe', PATH: 'C:/extra' };
+  const existing = new Set(['C:/tools/scrcpy.exe', 'C:/extra/scrcpy.exe']);
+  assert.equal(slash(resolveScrcpy({ env, platform: WIN, exists: existsIn(existing) })), 'C:/tools/scrcpy.exe');
+
+  const pathOnly = resolveScrcpy({ env: { PATH: 'C:/extra' }, platform: WIN, exists: existsIn(new Set(['C:/extra/scrcpy.exe'])) });
+  assert.equal(slash(pathOnly), 'C:/extra/scrcpy.exe');
+
+  assert.equal(resolveScrcpy({ env: {}, platform: WIN, exists: () => false }), null);
 });

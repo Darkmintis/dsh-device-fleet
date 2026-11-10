@@ -1629,6 +1629,7 @@ window.__ModuleLoader__.load({
       const [toast, setToast] = useState(null);
       const [logs, setLogs] = useState({ open: false, serial: 'all', preset: 'all', filter: '', data: null, error: null, loading: false });
       const [shots, setShots] = useState({ open: false, list: [] });
+      const [capabilities, setCapabilities] = useState(null);
       const timers = useRef({});
 
       const refresh = useCallback(async () => {
@@ -1760,6 +1761,20 @@ window.__ModuleLoader__.load({
       }, [logs.serial, logs.preset, logs.filter, selected]);
 
       useEffect(() => {
+        let cancelled = false;
+        fetchJson(apiUrl('scrcpy'))
+          .then((payload) => {
+            if (!cancelled) setCapabilities(payload.value ?? null);
+          })
+          .catch(() => {
+            if (!cancelled) setCapabilities({ scrcpy: { available: false, path: null } });
+          });
+        return () => {
+          cancelled = true;
+        };
+      }, []);
+
+      useEffect(() => {
         if (!logs.open) return undefined;
         fetchLogs();
         const timer = setInterval(() => fetchLogs(), LOG_POLL_MS);
@@ -1778,7 +1793,7 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { 'data-fleet-panel': 'main', style: PANEL.wrap },
+        { 'data-fleet-panel': props.onClose !== undefined ? 'overlay' : 'main', style: props.onClose !== undefined ? { ...PANEL.wrap, height: 'auto', maxHeight: 'none', padding: '12px' } : PANEL.wrap },
         h(
           'div',
           { style: PANEL.header },
@@ -1786,6 +1801,13 @@ window.__ModuleLoader__.load({
           h('span', { style: PANEL.sub }, listing === null ? '' : `${ready.length} ready · ${selectedCount} selected`),
           h('span', { style: { flex: '1 1 auto' } }),
           h('button', { type: 'button', style: PANEL.button, onClick: () => refresh(), disabled: busy !== null }, 'Refresh'),
+          props.onClose !== undefined
+            ? h(
+                'button',
+                { type: 'button', style: { ...PANEL.button, padding: '1px 8px', borderRadius: '999px' }, onClick: props.onClose, 'aria-label': 'Close device fleet' },
+                '✕',
+              )
+            : null,
         ),
         error !== null ? h('div', { style: PANEL.error }, error) : null,
         toast !== null ? h('div', { style: PANEL.toast(toast.tone) }, toast.text) : null,
@@ -1804,6 +1826,20 @@ window.__ModuleLoader__.load({
               disabled: actionDisabled,
             },
             'Logs',
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: PANEL.button,
+              onClick: () => runAction('mirror'),
+              disabled: actionDisabled || capabilities?.scrcpy?.available !== true,
+              title:
+                capabilities?.scrcpy?.available === true
+                  ? 'Open a read-only scrcpy mirror on every selected device'
+                  : 'scrcpy not found. Install it with: winget install Genymobile.scrcpy',
+            },
+            'Mirror',
           ),
           h(
             'button',
@@ -1859,6 +1895,81 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** Floating launcher chrome, styled like the shipped menu surfaces. */
+    const LAUNCHER = {
+      position: 'fixed',
+      right: '18px',
+      bottom: '84px',
+      zIndex: 2300,
+      width: '44px',
+      height: '44px',
+      padding: 0,
+      borderRadius: '999px',
+      border: `1px solid ${C.border2}`,
+      background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-overlay))',
+      boxShadow: 'var(--dsw-elevation-prominent, none)',
+      color: C.text,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      pointerEvents: 'auto',
+      WebkitAppRegion: 'no-drag',
+    };
+
+    /**
+     * Floating device-fleet gateway: a round button that opens the device
+     * overlay (selection + multi-device actions) above the composer.
+     * @returns {any} launcher element.
+     */
+    function FleetLauncher() {
+      const { useState } = React;
+      const [open, setOpen] = useState(false);
+      return h(
+        'div',
+        {
+          'data-fleet-launcher-root': 'open',
+          style: { position: 'fixed', inset: 0, zIndex: 2300, pointerEvents: 'none' },
+        },
+        h(
+          'button',
+          {
+            type: 'button',
+            'data-fleet-launcher': 'button',
+            'aria-expanded': open,
+            'aria-label': 'Device fleet',
+            title: 'Device fleet',
+            onClick: () => setOpen((value) => !value),
+            style: { ...LAUNCHER, color: open ? C.text : C.sub, background: open ? C.layer2 : LAUNCHER.background },
+          },
+          h(FleetPanelIcon, { size: 20, active: open }),
+        ),
+        open
+          ? h(
+              'div',
+              {
+                'data-fleet-overlay': 'open',
+                style: {
+                  position: 'fixed',
+                  right: '18px',
+                  bottom: '136px',
+                  width: 'min(440px, calc(100vw - 20px))',
+                  maxHeight: 'min(72vh, 640px)',
+                  overflow: 'auto',
+                  borderRadius: '12px',
+                  background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-overlay))',
+                  boxShadow: 'var(--dsw-elevation-prominent, none)',
+                  backdropFilter: 'var(--dsw-menu-backdrop-filter, none)',
+                  border: 0,
+                  pointerEvents: 'auto',
+                },
+              },
+              h(FleetPanel, { onClose: () => setOpen(false) }),
+            )
+          : null,
+      );
+    }
+
     /**
      * Sidebar icon for the Device fleet panel.
      * @param {{ size?: number, active?: boolean }} props Icon props.
@@ -1904,13 +2015,12 @@ window.__ModuleLoader__.load({
 
       // The sidebar entry and the main-column panel are the visible cockpit:
       // the sidebar id addresses the panel with the same key.
-      ctx.slots.inject('sidebar.panellist', () =>
+      ctx.slots.inject('shell.overlay', () =>
         ctx.slots.register(
-          { name: 'sidebar.panellist', id: PANEL_ID, order: 30, label: 'Device fleet' },
-          FleetPanelIcon,
+          { name: 'shell.overlay', id: 'device-fleet-launcher', order: 120, label: 'Device fleet' },
+          FleetLauncher,
         ),
       );
-      ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, FleetPanel));
 
       const componentFor = (toolName) => {
         if (toolName === 'fleet_list') return FleetListCard;
