@@ -1706,6 +1706,20 @@ window.__ModuleLoader__.load({
         [selected, refresh],
       );
 
+      const restartAdb = useCallback(async () => {
+        setBusy('adb');
+        try {
+          const payload = await fetchJson(apiUrl('adb/restart'), { method: 'POST' });
+          const devices = payload.value?.devices;
+          setToast({ tone: 'ok', text: `ADB restarted · ${typeof devices === 'number' ? devices : '?'} device(s) visible` });
+          await refresh();
+        } catch (cause) {
+          setToast({ tone: 'error', text: cause instanceof Error ? cause.message : String(cause) });
+        } finally {
+          setBusy(null);
+        }
+      }, [refresh]);
+
       const captureShot = useCallback(async (serial) => {
         setBusy(`shot:${serial}`);
         try {
@@ -1800,6 +1814,17 @@ window.__ModuleLoader__.load({
           h('span', { style: PANEL.title }, 'Devices'),
           h('span', { style: PANEL.sub }, listing === null ? '' : `${ready.length} ready · ${selectedCount} selected`),
           h('span', { style: { flex: '1 1 auto' } }),
+          h(
+            'button',
+            {
+              type: 'button',
+              style: PANEL.button,
+              onClick: () => restartAdb(),
+              disabled: busy !== null,
+              title: 'Restart the local adb server when a connected phone disappears',
+            },
+            'Restart ADB',
+          ),
           h('button', { type: 'button', style: PANEL.button, onClick: () => refresh(), disabled: busy !== null }, 'Refresh'),
           props.onClose !== undefined
             ? h(

@@ -334,3 +334,16 @@ test('POST action mirror launches one read-only scrcpy per selected device', asy
   assert.equal(launches.length, 1);
   assert.deepEqual(launches[0].args, ['--no-control', '--window-title', 'DSH device mirror', '-s', 'R58M12345']);
 });
+
+test('POST adb restart restarts the server and re-lists devices', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-fleet-api-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = makeService('single', root);
+  const { call } = makeApi(service);
+  const res = makeRes();
+  await call(makeReq({ method: 'POST', url: `${FLEET_API_PREFIX}/adb/restart` }), res);
+  const payload = jsonBody(res);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.value.started, true);
+  assert.equal(payload.value.devices, 1);
+});
