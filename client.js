@@ -1547,9 +1547,8 @@ window.__ModuleLoader__.load({
       const pkg = isRecord(device.package) ? device.package : undefined;
       const disabled = props.busy !== null;
       const kv = [
-        ['Android', `${device.androidVersion ?? '?'} (SDK ${device.sdk ?? '?'})`],
+        ['Android', `${device.androidVersion ?? '?'}`],
         ['Battery', typeof device.batteryPct === 'number' ? `${Math.round(device.batteryPct)}%` : '—'],
-        ['Type', device.isEmulator === true ? 'emulator' : 'device'],
       ];
       return h(
         'div',
@@ -1866,18 +1865,6 @@ window.__ModuleLoader__.load({
             },
             'Mirror',
           ),
-          h(
-            'button',
-            {
-              type: 'button',
-              style: PANEL.buttonDanger,
-              onClick: () => {
-                if (window.confirm(`Clear the foreground app's data on ${selectedCount} selected device(s)? This cannot be undone.`)) runAction('clear');
-              },
-              disabled: actionDisabled,
-            },
-            'Clear data',
-          ),
           h('span', { style: { flex: '1 1 auto' } }),
           h(
             'button',
@@ -1901,12 +1888,6 @@ window.__ModuleLoader__.load({
                 }),
               ),
             ),
-        h(
-          'div',
-          { style: PANEL.sub },
-          `Select the devices you are testing, then Relaunch/Stop/Logs act on all of them. ` +
-            `The app is detected from each device's foreground activity, and flutter run targets follow the same serial list.`,
-        ),
         logs.open
           ? h(PanelLogs, {
               ...logs,
@@ -1925,7 +1906,7 @@ window.__ModuleLoader__.load({
       position: 'fixed',
       right: '18px',
       bottom: '84px',
-      zIndex: 2300,
+      zIndex: 4000,
       width: '44px',
       height: '44px',
       padding: 0,
@@ -1943,55 +1924,140 @@ window.__ModuleLoader__.load({
     };
 
     /**
-     * Floating device-fleet gateway: a round button that opens the device
-     * overlay (selection + multi-device actions) above the composer.
+     * Shared overlay state. The launcher button and the panel are separate
+     * frame-overlay entries (like the host-health pills + dialog), so the
+     * button never nests a fixed overlay inside its own layer.
+     */
+    const fleetView = { open: false };
+    const fleetListeners = new Set();
+
+    function fleetNotify() {
+      for (const listener of fleetListeners) listener();
+    }
+
+    /**
+     * @param {boolean} open New state.
+     * @returns {void}
+     */
+    function fleetSetOpen(open) {
+      fleetView.open = open;
+      fleetNotify();
+    }
+
+    /** Subscribe a component to the shared overlay state. */
+    function useFleetView() {
+      const { useState, useEffect } = React;
+      const [, setTick] = useState(0);
+      useEffect(() => {
+        const listener = () => setTick((value) => value + 1);
+        fleetListeners.add(listener);
+        return () => fleetListeners.delete(listener);
+      }, []);
+      return fleetView;
+    }
+
+    /**
+     * Visible failure surface: a crash inside the panel still renders text
+     * instead of an invisible overlay.
+     */
+    class FleetGuard extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { error: null };
+      }
+
+      static getDerivedStateFromError(error) {
+        return { error };
+      }
+
+      render() {
+        if (this.state.error !== null) {
+          const message = this.state.error instanceof Error ? this.state.error.message : String(this.state.error);
+          return h(
+            'div',
+            { 'data-fleet-overlay-error': '1', style: { padding: '12px', color: C.err, fontSize: SMALL, whiteSpace: 'pre-wrap' } },
+            `Device overlay failed: ${message}`,
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    /**
+     * Round floating button that toggles the device fleet overlay.
      * @returns {any} launcher element.
      */
     function FleetLauncher() {
-      const { useState } = React;
-      const [open, setOpen] = useState(false);
+      const view = useFleetView();
+      return h(
+        'button',
+        {
+          type: 'button',
+          'data-fleet-launcher': 'button',
+          'aria-expanded': view.open,
+          'aria-label': 'Device fleet',
+          title: 'Device fleet',
+          onClick: () => fleetSetOpen(!view.open),
+          style: { ...LAUNCHER, color: view.open ? C.text : C.sub, background: view.open ? C.layer2 : LAUNCHER.background },
+        },
+        h(FleetPanelIcon, { size: 20, active: view.open }),
+      );
+    }
+
+    /**
+     * Frame-overlay panel: the device gateway card above the composer.
+     * @returns {any|null} overlay element or null while closed.
+     */
+    function FleetLayer() {
+      const { useRef, useEffect } = React;
+      const view = useFleetView();
+      const panelRef = useRef(null);
+
+      useEffect(() => {
+        if (!view.open) return undefined;
+        const onKeyDown = (event) => {
+          if (event.key === 'Escape') fleetSetOpen(false);
+        };
+        const onPointerDown = (event) => {
+          const target = event.target;
+          const panel = panelRef.current;
+          if (panel !== null && panel !== undefined && typeof panel.contains === 'function' && panel.contains(target) === true) return;
+          if (target !== null && typeof target === 'object' && typeof target.closest === 'function' && target.closest('[data-fleet-launcher]') !== null) return;
+          fleetSetOpen(false);
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('pointerdown', onPointerDown, true);
+        return () => {
+          document.removeEventListener('keydown', onKeyDown);
+          document.removeEventListener('pointerdown', onPointerDown, true);
+        };
+      }, [view.open]);
+
+      if (!view.open) return null;
       return h(
         'div',
-        {
-          'data-fleet-launcher-root': 'open',
-          style: { position: 'fixed', inset: 0, zIndex: 2300, pointerEvents: 'none' },
-        },
+        { 'data-fleet-overlay': 'open', style: { position: 'fixed', inset: 0, zIndex: 4000, pointerEvents: 'none' } },
         h(
-          'button',
+          'div',
           {
-            type: 'button',
-            'data-fleet-launcher': 'button',
-            'aria-expanded': open,
-            'aria-label': 'Device fleet',
-            title: 'Device fleet',
-            onClick: () => setOpen((value) => !value),
-            style: { ...LAUNCHER, color: open ? C.text : C.sub, background: open ? C.layer2 : LAUNCHER.background },
+            ref: panelRef,
+            style: {
+              position: 'fixed',
+              right: '18px',
+              bottom: '136px',
+              width: 'min(440px, calc(100vw - 20px))',
+              maxHeight: 'min(72vh, 640px)',
+              overflow: 'auto',
+              borderRadius: '12px',
+              background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-overlay))',
+              boxShadow: 'var(--dsw-elevation-prominent, none)',
+              backdropFilter: 'var(--dsw-menu-backdrop-filter, none)',
+              border: 0,
+              pointerEvents: 'auto',
+            },
           },
-          h(FleetPanelIcon, { size: 20, active: open }),
+          h(FleetGuard, null, h(FleetPanel, { onClose: () => fleetSetOpen(false) })),
         ),
-        open
-          ? h(
-              'div',
-              {
-                'data-fleet-overlay': 'open',
-                style: {
-                  position: 'fixed',
-                  right: '18px',
-                  bottom: '136px',
-                  width: 'min(440px, calc(100vw - 20px))',
-                  maxHeight: 'min(72vh, 640px)',
-                  overflow: 'auto',
-                  borderRadius: '12px',
-                  background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-overlay))',
-                  boxShadow: 'var(--dsw-elevation-prominent, none)',
-                  backdropFilter: 'var(--dsw-menu-backdrop-filter, none)',
-                  border: 0,
-                  pointerEvents: 'auto',
-                },
-              },
-              h(FleetPanel, { onClose: () => setOpen(false) }),
-            )
-          : null,
       );
     }
 
@@ -2044,6 +2110,12 @@ window.__ModuleLoader__.load({
         ctx.slots.register(
           { name: 'shell.overlay', id: 'device-fleet-launcher', order: 120, label: 'Device fleet' },
           FleetLauncher,
+        ),
+      );
+      ctx.slots.inject('shell.overlay', () =>
+        ctx.slots.register(
+          { name: 'shell.overlay', id: 'device-fleet-overlay', order: 121, label: 'Device fleet overlay' },
+          FleetLayer,
         ),
       );
 

@@ -78,10 +78,11 @@ Every tool that acts on a device accepts `serial`. Switching between a phone and
 Installing the bundle adds **no sidebar page**: a round device button floats at the
 bottom-right of the window, and clicking it opens the device overlay.
 
-- Cards show state, model, Android/SDK, battery, screen, and app version. Click a
-  card to tick that device; **Select all** / **None** manage the set.
-- **Relaunch**, **Stop**, **Screenshot**, **Logs**, **Clear data**, and **Mirror**
-  run on every ticked device. The app is resolved from each device's foreground
+- Cards show model, serial, state, Android version, and battery. Click a card to
+  tick that device; **Select all** / **None** manage the set. The destructive
+  clear-data action stays on the approval-gated tool, not in the overlay.
+- **Relaunch**, **Stop**, **Screenshot**, **Logs**, and **Mirror** run on every
+  ticked device; **Restart ADB** recovers a stale adb server without a terminal. The app is resolved from each device's foreground
   activity, so there is no package or APK field to fill in.
 - **Mirror** opens one read-only scrcpy window per ticked device (`--no-control`);
   input stays on the phone. scrcpy is discovered from `SCRCPY`, `PATH`, or the

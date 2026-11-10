@@ -202,6 +202,10 @@ function createFakeReact() {
     useState(initial) {
       return [typeof initial === 'function' ? initial() : initial, () => {}];
     },
+    useEffect() {},
+    useRef(initial) {
+      return { current: initial };
+    },
     useMemo(factory) {
       return factory();
     },
@@ -210,6 +214,16 @@ function createFakeReact() {
     },
     memo(component) {
       return component;
+    },
+    Component: class {
+      constructor(props) {
+        this.props = props ?? {};
+        this.state = {};
+      }
+
+      setState(update) {
+        this.state = { ...this.state, ...(typeof update === 'function' ? update(this.state) : update) };
+      }
     },
   };
 }
@@ -420,10 +434,12 @@ const toolRegistrations = registrations.filter((entry) => entry.options.name ===
 const byKey = new Map(toolRegistrations.map((entry) => [entry.options.key, entry]));
 
 test('registers the floating launcher and exactly the 12 fleet wire tool names', () => {
-  assert.deepEqual([...injections].sort(), ['shell.overlay', 'tool.call.toolview'], 'launcher and tool cards are registered');
-  const launcher = registrations.find((entry) => entry.options.name === 'shell.overlay');
-  assert.equal(launcher?.options.id, 'device-fleet-launcher', 'floating launcher id');
+  assert.deepEqual([...injections].sort(), ['shell.overlay', 'shell.overlay', 'tool.call.toolview'], 'launcher, overlay layer, and tool cards are registered');
+  const overlays = registrations.filter((entry) => entry.options.name === 'shell.overlay');
+  const launcher = overlays.find((entry) => entry.options.id === 'device-fleet-launcher');
+  const layer = overlays.find((entry) => entry.options.id === 'device-fleet-overlay');
   assert.equal(typeof launcher?.component, 'function', 'launcher has a component');
+  assert.equal(typeof layer?.component, 'function', 'overlay layer has a component');
   assert.equal(registrations.filter((entry) => entry.options.name === 'main').length, 0, 'no main-column panel is registered');
   assert.equal(registrations.filter((entry) => entry.options.name === 'sidebar.panellist').length, 0, 'no sidebar panel is registered');
   assert.equal(toolRegistrations.length, 12, 'one registration per fleet tool');
@@ -436,14 +452,20 @@ test('registers the floating launcher and exactly the 12 fleet wire tool names',
   }
 });
 
-test('the floating launcher renders a closed gateway button', () => {
-  const launcher = registrations.find((entry) => entry.options.name === 'shell.overlay');
-  const { tree, text: rendered } = renderComponent(launcher.component, {});
-  assert.equal(tree.props['data-fleet-launcher-root'], 'open');
-  const serialized = JSON.stringify(tree);
-  assert.match(serialized, /data-fleet-launcher/u, 'the round launcher button renders');
-  assert.doesNotMatch(serialized, /data-fleet-overlay/u, 'the overlay stays closed until clicked');
-  assert.doesNotMatch(rendered, /Loading|Reading/u, 'no loading placeholder is rendered');
+test('the floating launcher toggles the overlay layer', () => {
+  const overlays = registrations.filter((entry) => entry.options.name === 'shell.overlay');
+  const launcher = overlays.find((entry) => entry.options.id === 'device-fleet-launcher');
+  const layer = overlays.find((entry) => entry.options.id === 'device-fleet-overlay');
+  const button = launcher.component({});
+  assert.equal(button.props['data-fleet-launcher'], 'button', 'the round launcher button renders');
+  assert.equal(layer.component({}), null, 'the overlay layer starts closed');
+
+  button.props.onClick();
+  const openLayer = layer.component({});
+  assert.equal(openLayer.props['data-fleet-overlay'], 'open', 'clicking the launcher opens the overlay');
+
+  button.props.onClick();
+  assert.equal(layer.component({}), null, 'clicking again closes the overlay');
 });
 
 test('registers complete en and zh dictionaries', () => {
