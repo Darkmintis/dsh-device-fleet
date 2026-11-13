@@ -1538,24 +1538,69 @@ window.__ModuleLoader__.load({
      * @param {Record<string, any>} props Card props.
      * @returns {any} card element.
      */
+    /**
+     * Small device-type glyph: a phone for physical devices, a monitor for emulators.
+     * @param {{ emulator?: boolean }} props Glyph props.
+     * @returns {any} svg element.
+     */
+    function DeviceKindGlyph(props) {
+      const shared = {
+        width: 18,
+        height: 18,
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.7,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        'aria-hidden': true,
+        style: { flex: 'none', color: C.sub },
+      };
+      if (props.emulator === true) {
+        return h(
+          'svg',
+          shared,
+          h('rect', { x: '2.5', y: '4', width: '19', height: '13', rx: '2' }),
+          h('path', { d: 'M8 21h8' }),
+          h('path', { d: 'M12 17v4' }),
+        );
+      }
+      return h(
+        'svg',
+        shared,
+        h('rect', { x: '7', y: '2', width: '10', height: '20', rx: '2' }),
+        h('path', { d: 'M11 18.5h2' }),
+      );
+    }
+
+    /**
+     * One device box in the fleet panel. The left edge is colored by device type
+     * (brand = emulator, success = physical) so each device is identifiable at a
+     * glance, and the whole box is the selection target.
+     * @param {Record<string, any>} props Card props.
+     * @returns {any} card element.
+     */
     function PanelDeviceCard(props) {
       const device = props.device ?? {};
       const serial = typeof device.serial === 'string' ? device.serial : 'unknown';
       const state = typeof device.state === 'string' ? device.state : 'unknown';
-      const tone = stateTone(state);
+      const isEmulator = device.isEmulator === true;
+      const ready = state === 'device';
+      const tone = ready ? (isEmulator ? C.brand : C.ok) : stateTone(state);
       const selected = props.selected === true;
       const pkg = isRecord(device.package) ? device.package : undefined;
       const disabled = props.busy !== null;
-      const kv = [
-        ['Android', `${device.androidVersion ?? '?'}`],
-        ['Battery', typeof device.batteryPct === 'number' ? `${Math.round(device.batteryPct)}%` : '—'],
-      ];
+      const chips = [];
+      if (device.androidVersion !== undefined && device.androidVersion !== null) chips.push(`Android ${String(device.androidVersion)}`);
+      if (typeof device.batteryPct === 'number') chips.push(`Battery ${Math.round(device.batteryPct)}%`);
+      chips.push(isEmulator ? 'emulator' : 'physical');
       return h(
         'div',
         {
           key: serial,
           'data-device': serial,
           'data-state': state,
+          'data-device-kind': isEmulator ? 'emulator' : 'physical',
           'data-selected': selected ? 'true' : 'false',
           role: 'button',
           tabIndex: 0,
@@ -1568,11 +1613,15 @@ window.__ModuleLoader__.load({
           },
           style: {
             ...PANEL.card,
-            cursor: disabled ? 'default' : 'pointer',
-            borderColor: selected ? C.brand : C.border2,
+            gap: '8px',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            border: `1px solid ${selected ? C.brand : C.border2}`,
+            borderLeft: `3px solid ${tone}`,
             background: selected ? C.layer2 : C.layer1,
+            cursor: disabled ? 'default' : 'pointer',
             outline: 'none',
-            opacity: state === 'device' ? 1 : 0.65,
+            opacity: ready ? 1 : 0.7,
           },
         },
         h(
@@ -1597,16 +1646,28 @@ window.__ModuleLoader__.load({
             },
             selected ? '✓' : '',
           ),
-          h('span', { style: PANEL.dot(tone), 'aria-hidden': true }),
-          h('span', { style: { fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, String(device.model ?? serial)),
-          h('span', { style: { flex: '1 1 auto' } }),
-          h('span', { style: PANEL.pill(tone) }, state === 'device' ? 'ready' : state),
+          h(DeviceKindGlyph, { emulator: isEmulator }),
+          h(
+            'div',
+            { style: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0, flex: '1 1 auto' } },
+            h('span', { style: { fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, String(device.model ?? serial)),
+            h('span', { style: { color: C.sub, fontFamily: MONO, fontSize: '10.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, serial),
+          ),
+          h('span', { style: PANEL.pill(tone) }, ready ? (isEmulator ? 'emulator' : 'phone') : state),
         ),
-        h('div', { style: PANEL.sub, fontFamily: 'ui-monospace, monospace' }, serial),
         h(
           'div',
-          { style: PANEL.kv },
-          kv.flatMap(([label, value]) => [h('span', { key: `${label}-k` }, label), h('span', { key: `${label}-v`, style: { color: C.text } }, String(value))]),
+          { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
+          chips.map((label) =>
+            h(
+              'span',
+              {
+                key: label,
+                style: { fontSize: '10.5px', color: C.sub, border: `1px solid ${C.border1}`, borderRadius: '6px', padding: '2px 8px', background: C.layer2 },
+              },
+              label,
+            ),
+          ),
         ),
         pkg !== undefined ? h('div', { style: PANEL.sub }, `app ${String(pkg.versionName ?? '?')} (${String(pkg.versionCode ?? '?')})`) : null,
       );

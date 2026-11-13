@@ -33,6 +33,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Device cards are now distinct boxes: a colored left edge (brand = emulator,
+  success = physical, warning = offline), a device-type glyph, a bold model line
+  with the serial underneath, a readiness pill, and chips for Android version,
+  battery, and "emulator"/"physical" — so multiple connected devices are easy to
+  tell apart.
+
+### Fixed
+
 - The device overlay is now split into two frame-overlay entries — a launcher
   button and a panel layer sharing one state store — so clicking the floating
   button reliably opens the panel (with a visible error surface if rendering ever
