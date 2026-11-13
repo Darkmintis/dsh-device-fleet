@@ -24,6 +24,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The device fleet now lives in the **right Sidebar** as a "Devices" tab (same
+  column as Files/Browser/Terminal), opened from a compact device button in the
+  Session header utilities or from the right Sidebar's + guide. The floating
+  overlay launcher and its separate overlay layer are retired; the panel renders
+  as the column's page with the existing selection, Relaunch/Stop/Screenshot/
+  Logs/Mirror, and Restart ADB controls.
 - The sidebar/main-column panel is gone; the fleet is a floating overlay gateway
   so device selection is available from every Session without leaving the chat.
 - Removed the `device_shell` tool (and its approval gate). Fixed-argv adb actions

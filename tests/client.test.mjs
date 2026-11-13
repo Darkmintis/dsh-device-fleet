@@ -288,6 +288,27 @@ function mount(module) {
       const dispose = effect();
       return typeof dispose === 'function' ? dispose : () => {};
     },
+    inject(services, callback) {
+      const sidebarStub = {
+        effect: (effect, label) => ctx.effect(effect, label),
+        slots: ctx.slots,
+        sidebarRight: {
+          openTab() {},
+          openTabFromTarget() {},
+          commandTarget() {
+            return undefined;
+          },
+        },
+        sidebarRightTabs: {
+          register(definition) {
+            registrations.push({ options: { name: 'sidebarRightTabs.register', definition }, component: null });
+            return () => {};
+          },
+        },
+      };
+      callback(sidebarStub);
+      return () => {};
+    },
     slots: {
       inject(key, callback) {
         injections.push(key);
@@ -433,15 +454,19 @@ const { registrations, locales, effects, injections } = mount(module);
 const toolRegistrations = registrations.filter((entry) => entry.options.name === 'tool.call.toolview');
 const byKey = new Map(toolRegistrations.map((entry) => [entry.options.key, entry]));
 
-test('registers the floating launcher and exactly the 12 fleet wire tool names', () => {
-  assert.deepEqual([...injections].sort(), ['shell.overlay', 'shell.overlay', 'tool.call.toolview'], 'launcher, overlay layer, and tool cards are registered');
-  const overlays = registrations.filter((entry) => entry.options.name === 'shell.overlay');
-  const launcher = overlays.find((entry) => entry.options.id === 'device-fleet-launcher');
-  const layer = overlays.find((entry) => entry.options.id === 'device-fleet-overlay');
-  assert.equal(typeof launcher?.component, 'function', 'launcher has a component');
-  assert.equal(typeof layer?.component, 'function', 'overlay layer has a component');
+test('registers the right-sidebar tab and exactly the 12 fleet wire tool names', () => {
+  assert.deepEqual([...injections].sort(), ['conversation.session.header.utilities', 'sidebar.right.pane.tab', 'tool.call.toolview'], 'tab body, opener, and tool cards are registered');
+  const tabBody = registrations.find((entry) => entry.options.name === 'sidebar.right.pane.tab');
+  assert.equal(tabBody?.options.key, '@darkmintis/dsh-device-fleet/devices', 'tab body key is the registration id');
+  assert.equal(typeof tabBody?.component, 'function', 'tab body has a component');
+  const opener = registrations.find((entry) => entry.options.name === 'conversation.session.header.utilities');
+  assert.equal(opener?.options.id, 'device-fleet-open', 'header opener id');
+  assert.equal(typeof opener?.component, 'function', 'header opener has a component');
+  const tabType = registrations.find((entry) => entry.options.name === 'sidebarRightTabs.register');
+  assert.equal(tabType?.options.definition.kind, 'device-fleet', 'tab type kind');
+  assert.equal(tabType?.options.definition.title(), 'Devices', 'tab chip text');
   assert.equal(registrations.filter((entry) => entry.options.name === 'main').length, 0, 'no main-column panel is registered');
-  assert.equal(registrations.filter((entry) => entry.options.name === 'sidebar.panellist').length, 0, 'no sidebar panel is registered');
+  assert.equal(registrations.filter((entry) => entry.options.name === 'sidebar.panellist').length, 0, 'no left-sidebar panel is registered');
   assert.equal(toolRegistrations.length, 12, 'one registration per fleet tool');
   const keys = toolRegistrations.map((entry) => entry.options.key).sort();
   assert.deepEqual(keys, [...FLEET_TOOLS].sort(), 'registered keys are exactly the fleet tool names');
@@ -452,20 +477,20 @@ test('registers the floating launcher and exactly the 12 fleet wire tool names',
   }
 });
 
-test('the floating launcher toggles the overlay layer', () => {
-  const overlays = registrations.filter((entry) => entry.options.name === 'shell.overlay');
-  const launcher = overlays.find((entry) => entry.options.id === 'device-fleet-launcher');
-  const layer = overlays.find((entry) => entry.options.id === 'device-fleet-overlay');
-  const button = launcher.component({});
-  assert.equal(button.props['data-fleet-launcher'], 'button', 'the round launcher button renders');
-  assert.equal(layer.component({}), null, 'the overlay layer starts closed');
+test('the right-sidebar tab renders the device gateway', () => {
+  const body = registrations.find((entry) => entry.options.name === 'sidebar.right.pane.tab');
+  const tree = body.component({});
+  const expanded = expand(tree);
+  const rendered = collectText(expanded).join(' ').replace(/\s+/gu, ' ');
+  assert.match(rendered, /Devices/u, 'the tab body renders the gateway');
+  assert.match(rendered, /Relaunch/u, 'the gateway action bar renders');
+});
 
-  button.props.onClick();
-  const openLayer = layer.component({});
-  assert.equal(openLayer.props['data-fleet-overlay'], 'open', 'clicking the launcher opens the overlay');
-
-  button.props.onClick();
-  assert.equal(layer.component({}), null, 'clicking again closes the overlay');
+test('the header opener triggers the right-sidebar controller', () => {
+  const opener = registrations.find((entry) => entry.options.name === 'conversation.session.header.utilities');
+  const button = opener.component({});
+  assert.equal(typeof button.props.onClick, 'function');
+  assert.doesNotThrow(() => button.props.onClick({ currentTarget: null }));
 });
 
 test('registers complete en and zh dictionaries', () => {

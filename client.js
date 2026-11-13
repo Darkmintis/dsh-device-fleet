@@ -1867,7 +1867,7 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { 'data-fleet-panel': props.onClose !== undefined ? 'overlay' : 'main', style: props.onClose !== undefined ? { ...PANEL.wrap, height: 'auto', maxHeight: 'none', padding: '12px' } : PANEL.wrap },
+        { 'data-fleet-panel': props.variant === 'sidebar' ? 'sidebar' : props.onClose !== undefined ? 'overlay' : 'main', style: props.variant === 'sidebar' ? { ...PANEL.wrap, background: 'transparent', padding: '10px' } : props.onClose !== undefined ? { ...PANEL.wrap, height: 'auto', maxHeight: 'none', padding: '12px' } : PANEL.wrap },
         h(
           'div',
           { style: PANEL.header },
@@ -2015,6 +2015,70 @@ window.__ModuleLoader__.load({
         return () => fleetListeners.delete(listener);
       }, []);
       return fleetView;
+    }
+
+    /** Right-sidebar tab identity: the type id is the pane.tab slot key. */
+    const FLEET_TAB_ID = '@darkmintis/dsh-device-fleet/devices';
+    /** Right-sidebar tab kind opened by the header button and the guide entry. */
+    const FLEET_TAB_KIND = 'device-fleet';
+    /** Navigation controller captured from the soft injection; null in headless shells. */
+    let sidebarRightController = null;
+
+    /**
+     * Body of the device-fleet right-sidebar tab: the gateway panel rendered as
+     * the column's page.
+     * @returns {any} tab body element.
+     */
+    function FleetBody() {
+      return h(FleetPanel, { variant: 'sidebar' });
+    }
+
+    /**
+     * Compact opener in the conversation header: one click expands the right
+     * column on the device-fleet tab for the current session.
+     * @param {Record<string, any>} props Owner props.
+     * @returns {any} button element.
+     */
+    function FleetOpenButton(props) {
+      const onClick = (event) => {
+        const controller = sidebarRightController;
+        if (controller === null || controller === undefined) return;
+        try {
+          const element = event !== null && event !== undefined ? event.currentTarget : null;
+          const target = element !== null && typeof controller.commandTarget === 'function' ? controller.commandTarget(element) : undefined;
+          if (target !== undefined && typeof controller.openTabFromTarget === 'function') {
+            controller.openTabFromTarget(FLEET_TAB_KIND, target);
+          } else if (typeof controller.openTab === 'function') {
+            controller.openTab(FLEET_TAB_KIND);
+          }
+        } catch {
+          // The right column may be closing; the next click retries.
+        }
+      };
+      return h(
+        'button',
+        {
+          type: 'button',
+          'data-fleet-open': 'button',
+          'aria-label': 'Open device fleet',
+          title: 'Device fleet',
+          onClick,
+          style: {
+            font: 'inherit',
+            fontSize: SMALL,
+            padding: '2px 6px',
+            borderRadius: '6px',
+            border: `1px solid ${C.border2}`,
+            background: 'transparent',
+            color: C.sub,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          },
+        },
+        h(FleetPanelIcon, { size: 14 }),
+      );
     }
 
     /**
@@ -2167,18 +2231,48 @@ window.__ModuleLoader__.load({
 
       // The sidebar entry and the main-column panel are the visible cockpit:
       // the sidebar id addresses the panel with the same key.
-      ctx.slots.inject('shell.overlay', () =>
-        ctx.slots.register(
-          { name: 'shell.overlay', id: 'device-fleet-launcher', order: 120, label: 'Device fleet' },
-          FleetLauncher,
-        ),
-      );
-      ctx.slots.inject('shell.overlay', () =>
-        ctx.slots.register(
-          { name: 'shell.overlay', id: 'device-fleet-overlay', order: 121, label: 'Device fleet overlay' },
-          FleetLayer,
-        ),
-      );
+      // The fleet lives in the right Sidebar: a tab type, its body, and a compact
+      // opener in the conversation header utilities. The right column is only
+      // present in some compositions, so the whole block is a soft injection.
+      ctx.inject(['sidebarRight', 'sidebarRightTabs'], (sidebarCtx) => {
+        sidebarRightController = sidebarCtx.sidebarRight;
+        sidebarCtx.effect(
+          () =>
+            sidebarCtx.sidebarRightTabs.register({
+              id: FLEET_TAB_ID,
+              kind: FLEET_TAB_KIND,
+              multiple: true,
+              priority: 'extension',
+              title: () => 'Devices',
+              guide: [
+                {
+                  id: 'devices',
+                  order: 40,
+                  title: () => 'Devices',
+                  description: () => 'Phones and emulators: select devices, relaunch, mirror, and read logcat.',
+                },
+              ],
+            }),
+          'device-fleet: sidebar tab type',
+        );
+        sidebarCtx.effect(
+          () =>
+            sidebarCtx.slots.inject('sidebar.right.pane.tab', () =>
+              sidebarCtx.slots.register({ name: 'sidebar.right.pane.tab', key: FLEET_TAB_ID, locale: LOCALE_NS }, FleetBody),
+            ),
+          'device-fleet: sidebar tab body',
+        );
+        sidebarCtx.effect(
+          () =>
+            sidebarCtx.slots.inject('conversation.session.header.utilities', () =>
+              sidebarCtx.slots.register(
+                { name: 'conversation.session.header.utilities', id: 'device-fleet-open', order: 30, label: 'Device fleet' },
+                FleetOpenButton,
+              ),
+            ),
+          'device-fleet: sidebar opener',
+        );
+      });
 
       const componentFor = (toolName) => {
         if (toolName === 'fleet_list') return FleetListCard;

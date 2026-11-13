@@ -73,10 +73,11 @@ device_logcat(serial: "emulator-5554", preset: "upload", filter: "failed")
 
 Every tool that acts on a device accepts `serial`. Switching between a phone and an emulator never changes the loop.
 
-## Floating device overlay
+## Right-sidebar device fleet
 
-Installing the bundle adds **no sidebar page**: a round device button floats at the
-bottom-right of the window, and clicking it opens the device overlay.
+Installing the bundle adds a **Devices tab to the right Sidebar** (the same column
+as Files, Browser, and Terminal). Open it from the small device icon in the Session
+header utilities, or from the right Sidebar's **+** guide and its "Devices" entry.
 
 - Cards show model, serial, state, Android version, and battery. Click a card to
   tick that device; **Select all** / **None** manage the set. The destructive
@@ -85,9 +86,12 @@ bottom-right of the window, and clicking it opens the device overlay.
   ticked device; **Restart ADB** recovers a stale adb server without a terminal. The app is resolved from each device's foreground
   activity, so there is no package or APK field to fill in.
 - **Mirror** opens one read-only scrcpy window per ticked device (`--no-control`);
-  input stays on the phone. scrcpy is discovered from `SCRCPY`, `PATH`, or the
-  WinGet package directory. When it is missing the button stays disabled and tells
-  you how to install it.
+  input stays on the phone, so the mirror is visible while the tab remains your
+  control surface. scrcpy is discovered from `SCRCPY`, `PATH`, or the WinGet
+  package directory. When it is missing the button stays disabled and tells you how
+  to install it.
+- The tab lives in the session's right column and persists across Sessions like the
+  shipped tabs; the floating overlay and its launcher are retired.
 - The log viewer streams bounded logcat snapshots per device with the same
   `flutter` / `crash` / `upload` / `all` presets and filter as the tools.
 - The overlay polls only while it is open and talks to the Host through the same
